@@ -21,6 +21,7 @@ const menuItems = [
   { title: "Pengadaan", icon: Truck, path: "/procurement" },
   { title: "Laporan", icon: BarChart3, path: "/reports" },
   { title: "Pelanggan", icon: Users, path: "/customers" },
+  { title: "Manajemen User", icon: Users, path: "/users" },
   { title: "Pengaturan", icon: Settings, path: "/settings" },
 ];
 
