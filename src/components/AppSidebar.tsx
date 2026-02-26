@@ -13,6 +13,7 @@ import {
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useSettingsStore } from "@/stores/useSettingsStore";
 
 const menuItems = [
   { title: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
@@ -28,6 +29,7 @@ const menuItems = [
 const AppSidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
+  const { business } = useSettingsStore();
 
   return (
     <aside
@@ -38,12 +40,18 @@ const AppSidebar = () => {
     >
       {/* Brand */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border shrink-0">
-        <div className="w-9 h-9 rounded-lg gradient-accent flex items-center justify-center shrink-0">
-          <Pill className="w-5 h-5 text-accent-foreground" />
-        </div>
+        {business.logoUrl ? (
+          <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 bg-sidebar-accent flex items-center justify-center">
+            <img src={business.logoUrl} alt="Logo" className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          </div>
+        ) : (
+          <div className="w-9 h-9 rounded-lg gradient-accent flex items-center justify-center shrink-0">
+            <Pill className="w-5 h-5 text-accent-foreground" />
+          </div>
+        )}
         {!collapsed && (
           <span className="text-lg font-bold text-sidebar-foreground animate-slide-in-left">
-            ApotekPro
+            {business.namaApotek}
           </span>
         )}
       </div>
