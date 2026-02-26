@@ -1,18 +1,31 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 export type RoleName = 'Apoteker' | 'Asisten Apoteker' | 'Kasir';
+
+export interface ApotekerPendamping {
+  nama: string;
+  sipa: string;
+}
 
 export interface BusinessSettings {
   namaApotek: string;
   alamat: string;
   noSIA: string;
   ppnPercent: number;
+  logoUrl: string;
+  email: string;
+  telepon: string;
+  website: string;
+  namaAPJ: string;
+  noSIPA: string;
+  noSTRA: string;
+  apotekerPendamping: ApotekerPendamping[];
 }
 
 export interface InventorySettings {
   stokKritis: number;
-  reminderKadaluwarsa: number; // in months
+  reminderKadaluwarsa: number;
 }
 
 export interface UnitItem {
@@ -31,13 +44,21 @@ export interface MasterDataSettings {
 }
 
 export interface LoyaltySettings {
-  pointValue: number; // 1 poin = Rp X
-  goldThreshold: number; // total belanja untuk Gold
+  pointValue: number;
+  goldThreshold: number;
 }
 
 export interface RolePermission {
   role: RoleName;
   permissions: string[];
+}
+
+export interface ReceiptSettings {
+  headerLine1: string;
+  headerLine2: string;
+  headerLine3: string;
+  footerLine1: string;
+  footerLine2: string;
 }
 
 export interface SettingsState {
@@ -46,6 +67,9 @@ export interface SettingsState {
   masterData: MasterDataSettings;
   loyalty: LoyaltySettings;
   roles: RolePermission[];
+  receipt: ReceiptSettings;
+  _hasHydrated: boolean;
+  setHasHydrated: (v: boolean) => void;
   setBusiness: (b: Partial<BusinessSettings>) => void;
   setInventory: (i: Partial<InventorySettings>) => void;
   setMasterData: (m: Partial<MasterDataSettings>) => void;
@@ -55,6 +79,7 @@ export interface SettingsState {
   removeCategory: (id: string) => void;
   setLoyalty: (l: Partial<LoyaltySettings>) => void;
   setRolePermissions: (role: RoleName, permissions: string[]) => void;
+  setReceipt: (r: Partial<ReceiptSettings>) => void;
 }
 
 const allPermissions = [
@@ -64,11 +89,21 @@ const allPermissions = [
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
+      _hasHydrated: false,
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
       business: {
         namaApotek: 'ApotekPro',
         alamat: 'Jl. Sehat No. 1, Jakarta',
         noSIA: 'SIA-001/DINAS/2024',
         ppnPercent: 11,
+        logoUrl: '',
+        email: 'info@apotekpro.com',
+        telepon: '08123456789',
+        website: 'www.apotekpro.com',
+        namaAPJ: 'apt. Sari Dewi, S.Farm',
+        noSIPA: 'SIPA-001/2024',
+        noSTRA: 'STRA-001/2024',
+        apotekerPendamping: [],
       },
       inventory: {
         stokKritis: 10,
@@ -101,6 +136,13 @@ export const useSettingsStore = create<SettingsState>()(
         { role: 'Asisten Apoteker', permissions: ['dashboard', 'transaksi', 'inventaris', 'pengadaan', 'pelanggan'] },
         { role: 'Kasir', permissions: ['dashboard', 'transaksi', 'pelanggan'] },
       ],
+      receipt: {
+        headerLine1: '',
+        headerLine2: '',
+        headerLine3: '',
+        footerLine1: 'Terima kasih atas kunjungan Anda',
+        footerLine2: 'Semoga lekas sembuh!',
+      },
       setBusiness: (b) => set((s) => ({ business: { ...s.business, ...b } })),
       setInventory: (i) => set((s) => ({ inventory: { ...s.inventory, ...i } })),
       setMasterData: (m) => set((s) => ({ masterData: { ...s.masterData, ...m } })),
@@ -120,7 +162,46 @@ export const useSettingsStore = create<SettingsState>()(
       setRolePermissions: (role, permissions) => set((s) => ({
         roles: s.roles.map((r) => r.role === role ? { ...r, permissions } : r),
       })),
+      setReceipt: (r) => set((s) => ({ receipt: { ...s.receipt, ...r } })),
     }),
-    { name: 'apotek-settings' }
+    {
+      name: 'apotek-storage',
+      storage: createJSONStorage(() => localStorage),
+      version: 2,
+      migrate: (persistedState: any, version: number) => {
+        if (version < 2) {
+          return {
+            ...persistedState,
+            business: {
+              namaApotek: 'ApotekPro',
+              alamat: 'Jl. Sehat No. 1, Jakarta',
+              noSIA: 'SIA-001/DINAS/2024',
+              ppnPercent: 11,
+              logoUrl: '',
+              email: 'info@apotekpro.com',
+              telepon: '08123456789',
+              website: 'www.apotekpro.com',
+              namaAPJ: 'apt. Sari Dewi, S.Farm',
+              noSIPA: 'SIPA-001/2024',
+              noSTRA: 'STRA-001/2024',
+              apotekerPendamping: [],
+              ...(persistedState?.business || {}),
+            },
+            receipt: {
+              headerLine1: '',
+              headerLine2: '',
+              headerLine3: '',
+              footerLine1: 'Terima kasih atas kunjungan Anda',
+              footerLine2: 'Semoga lekas sembuh!',
+              ...(persistedState?.receipt || {}),
+            },
+          };
+        }
+        return persistedState as SettingsState;
+      },
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
+    }
   )
 );

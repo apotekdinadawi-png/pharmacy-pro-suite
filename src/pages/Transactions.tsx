@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "@/hooks/use-toast";
+import { useSettingsStore } from "@/stores/useSettingsStore";
+import { formatRupiah, formatNumber } from "@/lib/currency";
 
 // === DATA ===
 const sampleProducts = [
@@ -32,9 +34,18 @@ const sampleProducts = [
 type CartItem = { id: number; name: string; price: number; qty: number; unit: string; aturanPakai?: string };
 
 // === RECEIPT PRINT ===
-const printReceipt = (cart: CartItem[], total: number, payment: string, prescription?: PrescriptionData) => {
+const printReceipt = (cart: CartItem[], total: number, payment: string, nominalBayar: number, prescription?: PrescriptionData) => {
   const now = new Date();
   const trxId = `TRX-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 9999)).padStart(4, "0")}`;
+
+  // Pull from settings store
+  const { business, receipt } = useSettingsStore.getState();
+  const headerName = receipt.headerLine1 || business.namaApotek;
+  const headerAddr = receipt.headerLine2 || business.alamat;
+  const headerTelp = receipt.headerLine3 || `Telp: ${business.telepon}`;
+  const footer1 = receipt.footerLine1;
+  const footer2 = receipt.footerLine2;
+  const kembalian = nominalBayar - total;
 
   const w = window.open("", "_blank", "width=400,height=600");
   if (!w) return;
@@ -45,22 +56,24 @@ const printReceipt = (cart: CartItem[], total: number, payment: string, prescrip
       table{width:100%;border-collapse:collapse} td{padding:2px 0}
       .right{text-align:right} .bold{font-weight:bold}
     </style></head><body>
-    <div class="center"><b>APOTEK PRO</b><br/>Jl. Sehat No. 1<br/>Telp: (021) 123-4567</div>
+    <div class="center"><b>${headerName}</b><br/>${headerAddr}<br/>${headerTelp}</div>
+    ${business.namaAPJ ? `<div class="center" style="font-size:10px">APJ: ${business.namaAPJ} — SIPA: ${business.noSIPA}</div>` : ''}
     <div class="line"></div>
     <div>No: ${trxId}<br/>Tgl: ${now.toLocaleString("id-ID")}<br/>Kasir: Admin</div>
     ${prescription ? `<div>Dokter: ${prescription.doctorName}<br/>Pasien: ${prescription.patientName}</div>` : ""}
     <div class="line"></div>
     <table>${cart.map((c) => `
       <tr><td colspan="2">${c.name}</td></tr>
-      <tr><td>${c.qty} x Rp ${c.price.toLocaleString("id-ID")}</td><td class="right">Rp ${(c.price * c.qty).toLocaleString("id-ID")}</td></tr>
+      <tr><td>${c.qty} x ${formatRupiah(c.price)}</td><td class="right">${formatRupiah(c.price * c.qty)}</td></tr>
     `).join("")}</table>
     <div class="line"></div>
     <table>
-      <tr class="bold"><td>TOTAL</td><td class="right">Rp ${total.toLocaleString("id-ID")}</td></tr>
-      <tr><td>Bayar (${payment})</td><td class="right">Rp ${total.toLocaleString("id-ID")}</td></tr>
+      <tr class="bold"><td>TOTAL</td><td class="right">${formatRupiah(total)}</td></tr>
+      <tr><td>Bayar (${payment})</td><td class="right">${formatRupiah(nominalBayar)}</td></tr>
+      <tr><td>Kembalian</td><td class="right">${formatRupiah(kembalian)}</td></tr>
     </table>
     <div class="line"></div>
-    <div class="center">Terima kasih<br/>Semoga lekas sembuh!</div>
+    <div class="center">${footer1}<br/>${footer2}</div>
     </body></html>
   `);
   w.document.close();
@@ -106,6 +119,7 @@ const Transactions = () => {
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState("");
+  const [nominalBayar, setNominalBayar] = useState<number>(0);
 
   // Prescription
   const [prescription, setPrescription] = useState<PrescriptionData>({ doctorName: "", patientName: "", note: "" });
@@ -177,10 +191,16 @@ const Transactions = () => {
 
   const handlePay = (method: string) => {
     if (cart.length === 0) return;
+    const bayar = nominalBayar || total;
+    if (method === "Tunai" && bayar < total) {
+      toast({ title: "Error", description: "Nominal bayar kurang dari total.", variant: "destructive" });
+      return;
+    }
     setPaymentMethod(method);
-    printReceipt(cart, total, method, prescriptionSaved ? prescription : undefined);
-    toast({ title: "Transaksi Berhasil", description: `Pembayaran ${method} — Rp ${total.toLocaleString("id-ID")}` });
+    printReceipt(cart, total, method, bayar, prescriptionSaved ? prescription : undefined);
+    toast({ title: "Transaksi Berhasil", description: `Pembayaran ${method} — ${formatRupiah(total)}` });
     setCart([]);
+    setNominalBayar(0);
     setPrescription({ doctorName: "", patientName: "", note: "" });
     setPrescriptionSaved(false);
   };
@@ -300,7 +320,7 @@ const Transactions = () => {
                                   </SelectContent>
                                 </Select>
                               </TableCell>
-                              <TableCell className="text-right text-sm font-medium">Rp {sub.toLocaleString("id-ID")}</TableCell>
+                              <TableCell className="text-right text-sm font-medium">{formatRupiah(sub)}</TableCell>
                               <TableCell>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeRacikanRow(idx)} disabled={racikanItems.length === 1}>
                                   <X className="w-3 h-3" />
@@ -321,7 +341,7 @@ const Transactions = () => {
                   </div>
                   <div className="border-t pt-3 flex justify-between items-center">
                     <span className="font-semibold text-foreground">Total Racikan</span>
-                    <span className="text-lg font-bold text-primary">Rp {racikanTotal.toLocaleString("id-ID")}</span>
+                    <span className="text-lg font-bold text-primary">{formatRupiah(racikanTotal)}</span>
                   </div>
                 </div>
                 <DialogFooter>
@@ -366,7 +386,7 @@ const Transactions = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-primary">Rp {p.price.toLocaleString("id-ID")}</p>
+                    <p className="text-sm font-bold text-primary">{formatRupiah(p.price)}</p>
                     <p className="text-xs text-muted-foreground">/{p.unit}</p>
                   </div>
                 </CardContent>
@@ -397,7 +417,7 @@ const Transactions = () => {
                   <div key={item.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">Rp {item.price.toLocaleString("id-ID")} x {item.qty}</p>
+                      <p className="text-xs text-muted-foreground">{formatRupiah(item.price)} x {item.qty}</p>
                       {item.aturanPakai && <p className="text-xs text-primary mt-0.5">📋 {item.aturanPakai}</p>}
                     </div>
                     <div className="flex items-center gap-1 ml-2">
@@ -445,9 +465,30 @@ const Transactions = () => {
 
               {cart.length > 0 && (
                 <>
-                  <div className="border-t border-border pt-3 flex justify-between items-center">
-                    <span className="text-sm font-semibold text-foreground">Total</span>
-                    <span className="text-lg font-bold text-primary">Rp {total.toLocaleString("id-ID")}</span>
+                  <div className="border-t border-border pt-3 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-semibold text-foreground">Total</span>
+                      <span className="text-lg font-bold text-primary">{formatRupiah(total)}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Nominal Bayar</Label>
+                      <Input
+                        type="number"
+                        placeholder="Masukkan nominal..."
+                        value={nominalBayar || ''}
+                        onChange={(e) => setNominalBayar(Number(e.target.value))}
+                        className="h-9"
+                      />
+                    </div>
+                    {nominalBayar > 0 && nominalBayar >= total && (
+                      <div className="flex justify-between items-center bg-primary/10 rounded-lg px-3 py-2">
+                        <span className="text-sm font-medium text-foreground">Kembalian</span>
+                        <span className="text-lg font-bold text-primary">{formatRupiah(nominalBayar - total)}</span>
+                      </div>
+                    )}
+                    {nominalBayar > 0 && nominalBayar < total && (
+                      <p className="text-xs text-destructive">Nominal bayar kurang {formatRupiah(total - nominalBayar)}</p>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => handlePay("Tunai")}><Banknote className="w-3 h-3" /> Tunai</Button>

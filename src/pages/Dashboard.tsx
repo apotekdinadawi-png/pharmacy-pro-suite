@@ -9,6 +9,7 @@ import {
 import { useInventoryStore } from "@/stores/useInventoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useProcurementStore } from "@/stores/useProcurementStore";
+import { formatRupiah, formatNumber } from "@/lib/currency";
 
 const peakHoursData = [
   { jam: "08", pelanggan: 12 }, { jam: "09", pelanggan: 25 }, { jam: "10", pelanggan: 38 },
@@ -63,7 +64,7 @@ const Dashboard = () => {
           <div className="text-sm">
             <b className="text-foreground">Notifikasi Harga Beli Naik:</b>
             {priceAlerts.slice(0, 3).map((a, i) => (
-              <span key={i} className="block text-muted-foreground">{a.drugName}: Rp {a.oldPrice.toLocaleString("id-ID")} → Rp {a.newPrice.toLocaleString("id-ID")}</span>
+              <span key={i} className="block text-muted-foreground">{a.drugName}: {formatRupiah(a.oldPrice)} → {formatRupiah(a.newPrice)}</span>
             ))}
           </div>
         </div>
@@ -175,7 +176,7 @@ const Dashboard = () => {
               <div key={inv.id} className={`flex items-center justify-between p-2.5 rounded-lg border ${inv.daysLeft <= 3 ? "bg-destructive/5 border-destructive/15" : "bg-muted/50 border-border"}`}>
                 <div>
                   <p className="text-sm font-medium text-foreground">{inv.supplierName}</p>
-                  <p className="text-xs text-muted-foreground">Rp {inv.totalAmount.toLocaleString("id-ID")} — {inv.invoiceNo}</p>
+                  <p className="text-xs text-muted-foreground">{formatRupiah(inv.totalAmount)} — {inv.invoiceNo}</p>
                 </div>
                 <Badge variant={inv.daysLeft <= 3 ? "destructive" : "secondary"} className="text-xs">
                   {inv.daysLeft > 0 ? `${inv.daysLeft} hari lagi` : inv.daysLeft === 0 ? "Hari ini" : `Terlambat ${Math.abs(inv.daysLeft)}hr`}
