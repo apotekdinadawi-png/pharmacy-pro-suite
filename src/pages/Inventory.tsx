@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import { useInventoryStore, type DrugMaster } from "@/stores/useInventoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useProcurementStore } from "@/stores/useProcurementStore";
+import { formatRupiah } from "@/lib/currency";
 
 const categoryColor: Record<string, string> = {
   "Obat Bebas": "bg-success text-success-foreground",
@@ -22,6 +23,11 @@ const categoryColor: Record<string, string> = {
   "Obat Narkotika": "bg-destructive text-destructive-foreground",
 };
 
+const emptyForm: Omit<DrugMaster, 'id'> = {
+  name: '', barcode: '', category: '', activeIngredient: '', kegunaan: '', imageUrl: '',
+  baseUnit: '', sellPrice: 0, rack: '', stock: 0, minStock: 10, conversions: []
+};
+
 const MasterObatTab = () => {
   const { drugs, addDrug, updateDrug, removeDrug } = useInventoryStore();
   const { masterData } = useSettingsStore();
@@ -29,37 +35,24 @@ const MasterObatTab = () => {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<Omit<DrugMaster, 'id'>>({
-    name: '', barcode: '', category: '', activeIngredient: '', baseUnit: '', sellPrice: 0, rack: '', stock: 0, minStock: 10, conversions: []
-  });
+  const [form, setForm] = useState<Omit<DrugMaster, 'id'>>(emptyForm);
 
-  const filtered = drugs.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()) || i.barcode.includes(search));
+  const filtered = drugs.filter((i) =>
+    i.name.toLowerCase().includes(search.toLowerCase()) ||
+    i.barcode.includes(search) ||
+    i.kegunaan.toLowerCase().includes(search.toLowerCase())
+  );
 
-  const openAdd = () => {
-    setEditId(null);
-    setForm({ name: '', barcode: '', category: '', activeIngredient: '', baseUnit: '', sellPrice: 0, rack: '', stock: 0, minStock: 10, conversions: [] });
-    setDialogOpen(true);
-  };
-
-  const openEdit = (drug: DrugMaster) => {
-    setEditId(drug.id);
-    const { id, ...rest } = drug;
-    setForm(rest);
-    setDialogOpen(true);
-  };
+  const openAdd = () => { setEditId(null); setForm(emptyForm); setDialogOpen(true); };
+  const openEdit = (drug: DrugMaster) => { setEditId(drug.id); const { id, ...rest } = drug; setForm(rest); setDialogOpen(true); };
 
   const handleSave = () => {
     if (!form.name || !form.category || !form.baseUnit) {
       toast({ title: "Error", description: "Nama, Kategori, dan Satuan wajib diisi.", variant: "destructive" });
       return;
     }
-    if (editId) {
-      updateDrug(editId, form);
-      toast({ title: "Berhasil", description: `${form.name} berhasil diperbarui.` });
-    } else {
-      addDrug(form);
-      toast({ title: "Berhasil", description: `${form.name} berhasil ditambahkan ke master obat.` });
-    }
+    if (editId) { updateDrug(editId, form); toast({ title: "Berhasil", description: `${form.name} berhasil diperbarui.` }); }
+    else { addDrug(form); toast({ title: "Berhasil", description: `${form.name} berhasil ditambahkan ke master obat.` }); }
     setDialogOpen(false);
   };
 
@@ -73,74 +66,89 @@ const MasterObatTab = () => {
           <div className="flex gap-2">
             <div className="relative w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Cari nama / barcode..." className="pl-10 h-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input placeholder="Cari nama / barcode / kegunaan..." className="pl-10 h-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Tambah Obat</Button>
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="rounded-lg border overflow-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8"></TableHead>
-                <TableHead>Nama Obat</TableHead>
-                <TableHead>Barcode</TableHead>
-                <TableHead>Kategori</TableHead>
-                <TableHead>Zat Aktif</TableHead>
-                <TableHead className="text-right">Stok</TableHead>
-                <TableHead className="text-right">Harga Jual</TableHead>
-                <TableHead className="w-20"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((item) => (
-                <>
-                  <TableRow key={item.id} className="cursor-pointer" onClick={() => setExpanded(expanded === item.id ? null : item.id)}>
-                    <TableCell className="px-2">
-                      {expanded === item.id ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                    </TableCell>
-                    <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell className="text-xs font-mono">{item.barcode}</TableCell>
-                    <TableCell><Badge className={`text-xs ${categoryColor[item.category] || "bg-muted text-muted-foreground"}`}>{item.category}</Badge></TableCell>
-                    <TableCell className="text-xs">{item.activeIngredient}</TableCell>
-                    <TableCell className="text-right">
-                      <span className={item.stock <= item.minStock ? "text-destructive font-bold" : ""}>{item.stock}</span>
-                    </TableCell>
-                    <TableCell className="text-right">Rp {item.sellPrice.toLocaleString("id-ID")}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}><Pencil className="w-3 h-3" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { removeDrug(item.id); toast({ title: "Dihapus", description: `${item.name} dihapus dari master.` }); }}><Trash2 className="w-3 h-3" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  {expanded === item.id && (
-                    <TableRow key={`conv-${item.id}`}>
-                      <TableCell colSpan={8} className="bg-muted/30 py-3 px-6">
-                        <div className="flex items-center gap-2 mb-2">
-                          <ArrowRightLeft className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-semibold text-foreground">Konversi Satuan</span>
+        {drugs.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">Belum ada data obat. Klik "Tambah Obat" untuk mulai menginput.</p>
+          </div>
+        ) : (
+          <div className="rounded-lg border overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead>Nama Obat</TableHead>
+                  <TableHead>Barcode</TableHead>
+                  <TableHead>Kategori</TableHead>
+                  <TableHead>Kegunaan</TableHead>
+                  <TableHead className="text-right">Stok</TableHead>
+                  <TableHead className="text-right">Harga Jual</TableHead>
+                  <TableHead className="w-20"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((item) => (
+                  <>
+                    <TableRow key={item.id} className="cursor-pointer" onClick={() => setExpanded(expanded === item.id ? null : item.id)}>
+                      <TableCell className="px-2">
+                        {expanded === item.id ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                      </TableCell>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell className="text-xs font-mono">{item.barcode || "—"}</TableCell>
+                      <TableCell><Badge className={`text-xs ${categoryColor[item.category] || "bg-muted text-muted-foreground"}`}>{item.category}</Badge></TableCell>
+                      <TableCell className="text-xs max-w-[200px] truncate">{item.kegunaan || "—"}</TableCell>
+                      <TableCell className="text-right">
+                        <span className={item.stock <= item.minStock ? "text-destructive font-bold" : ""}>{item.stock.toLocaleString('id-ID')}</span>
+                      </TableCell>
+                      <TableCell className="text-right">{formatRupiah(item.sellPrice)}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}><Pencil className="w-3 h-3" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { removeDrug(item.id); toast({ title: "Dihapus", description: `${item.name} dihapus dari master.` }); }}><Trash2 className="w-3 h-3" /></Button>
                         </div>
-                        <div className="flex flex-wrap gap-3">
-                          {item.conversions.map((c, idx) => (
-                            <Badge key={idx} variant="outline" className="text-xs py-1 px-3">1 {c.from} = {c.factor} {c.to}</Badge>
-                          ))}
-                          {item.conversions.length === 0 && <span className="text-xs text-muted-foreground">Belum ada konversi.</span>}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-2">Rak: {item.rack} | Min. Stok: {item.minStock}</p>
                       </TableCell>
                     </TableRow>
-                  )}
-                </>
-              ))}
-              {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Tidak ada data obat.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                    {expanded === item.id && (
+                      <TableRow key={`detail-${item.id}`}>
+                        <TableCell colSpan={8} className="bg-muted/30 py-3 px-6">
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <p className="text-muted-foreground">Zat Aktif: <span className="text-foreground font-medium">{item.activeIngredient || "—"}</span></p>
+                              <p className="text-muted-foreground">Rak: <span className="text-foreground font-medium">{item.rack || "—"}</span></p>
+                              <p className="text-muted-foreground">Min. Stok: <span className="text-foreground font-medium">{item.minStock}</span></p>
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <ArrowRightLeft className="w-4 h-4 text-primary" />
+                                <span className="font-semibold text-foreground">Konversi Satuan</span>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {item.conversions.map((c, idx) => (
+                                  <Badge key={idx} variant="outline" className="text-xs py-1 px-3">1 {c.from} = {c.factor} {c.to}</Badge>
+                                ))}
+                                {item.conversions.length === 0 && <span className="text-xs text-muted-foreground">Belum ada konversi.</span>}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                ))}
+                {filtered.length === 0 && drugs.length > 0 && (
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Tidak ada data obat cocok dengan pencarian.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </CardContent>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -192,6 +200,15 @@ const MasterObatTab = () => {
             <div className="space-y-1.5">
               <Label>Min. Stok</Label>
               <Input type="number" value={form.minStock} onChange={(e) => setForm({ ...form, minStock: Number(e.target.value) })} />
+            </div>
+            <div className="space-y-1.5 col-span-2">
+              <Label>Kegunaan / Indikasi</Label>
+              <Input value={form.kegunaan} onChange={(e) => setForm({ ...form, kegunaan: e.target.value })} placeholder="demam, sakit kepala, nyeri (pisahkan dengan koma)" />
+              <p className="text-xs text-muted-foreground">Pencarian di Kasir juga mencakup kegunaan ini.</p>
+            </div>
+            <div className="space-y-1.5 col-span-2">
+              <Label>URL Foto Obat</Label>
+              <Input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://..." />
             </div>
           </div>
           <DialogFooter>
@@ -256,7 +273,7 @@ const KartuStokTab = () => {
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Belum ada data kartu stok. Data akan muncul setelah input Barang Masuk.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Belum ada data kartu stok. Data akan muncul setelah input Barang Masuk atau transaksi Kasir.</TableCell></TableRow>
               ) : filtered.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell className="text-xs whitespace-nowrap">{row.date}</TableCell>
@@ -282,8 +299,7 @@ const KartuStokTab = () => {
 const GRNTab = () => {
   const { drugs, addGRN } = useInventoryStore();
   const { business } = useSettingsStore();
-  const { suppliers } = useProcurementStore();
-  const { addInvoiceTracker } = useProcurementStore();
+  const { suppliers, addInvoiceTracker } = useProcurementStore();
 
   const [invoiceNo, setInvoiceNo] = useState("");
   const [supplierId, setSupplierId] = useState("");
@@ -318,7 +334,6 @@ const GRNTab = () => {
       const drug = drugs.find((d) => d.id === i.drugId);
       const rawPrice = Number(i.buyPrice);
       const priceWithPPN = Math.round(rawPrice * ppnMultiplier);
-      // Find last buy price from existing GRN entries (simplified: use 0 as previous)
       return {
         drugId: i.drugId,
         drugName: drug?.name || '',
@@ -344,7 +359,6 @@ const GRNTab = () => {
       items: grnItems,
     });
 
-    // Create invoice tracker with countdown
     const dueDate = new Date(receiveDate);
     dueDate.setDate(dueDate.getDate() + supplier.topDays);
     addInvoiceTracker({
@@ -371,86 +385,94 @@ const GRNTab = () => {
         <p className="text-xs text-muted-foreground">Harga beli otomatis ditambah PPN {business.ppnPercent}% dari Pengaturan.</p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-1.5">
-            <Label>No. Faktur *</Label>
-            <Input placeholder="F-2026-001" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} />
+        {suppliers.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <p className="text-sm">Tambahkan supplier terlebih dahulu di menu Pengadaan → Supplier.</p>
           </div>
-          <div className="space-y-1.5">
-            <Label>Supplier / PBF *</Label>
-            <Select value={supplierId} onValueChange={setSupplierId}>
-              <SelectTrigger><SelectValue placeholder="Pilih supplier" /></SelectTrigger>
-              <SelectContent>
-                {suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} (TOP {s.topDays}hr)</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Tanggal Terima</Label>
-            <Input type="date" value={receiveDate} onChange={(e) => setReceiveDate(e.target.value)} />
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label>No. Faktur *</Label>
+                <Input placeholder="F-2026-001" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Supplier / PBF *</Label>
+                <Select value={supplierId} onValueChange={setSupplierId}>
+                  <SelectTrigger><SelectValue placeholder="Pilih supplier" /></SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} (TOP {s.topDays}hr)</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Tanggal Terima</Label>
+                <Input type="date" value={receiveDate} onChange={(e) => setReceiveDate(e.target.value)} />
+              </div>
+            </div>
 
-        {selectedSupplier && (
-          <div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground">
-            TOP: <span className="font-semibold text-foreground">{selectedSupplier.topDays} hari</span> — Faktur ini akan jatuh tempo otomatis dan muncul di Dashboard.
-          </div>
-        )}
+            {selectedSupplier && (
+              <div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground">
+                TOP: <span className="font-semibold text-foreground">{selectedSupplier.topDays} hari</span> — Faktur ini akan jatuh tempo otomatis dan muncul di Dashboard.
+              </div>
+            )}
 
-        <div className="rounded-lg border overflow-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama Obat</TableHead>
-                <TableHead className="w-20">Qty</TableHead>
-                <TableHead className="w-28">Satuan</TableHead>
-                <TableHead>No. Batch</TableHead>
-                <TableHead className="w-32">Exp. Date</TableHead>
-                <TableHead className="w-32">Harga Beli</TableHead>
-                <TableHead className="w-32">+ PPN ({business.ppnPercent}%)</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((row, idx) => {
-                const ppnPrice = row.buyPrice ? Math.round(Number(row.buyPrice) * (1 + business.ppnPercent / 100)) : 0;
-                return (
-                  <TableRow key={idx}>
-                    <TableCell>
-                      <Select value={row.drugId} onValueChange={(v) => updateRow(idx, "drugId", v)}>
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Pilih obat" /></SelectTrigger>
-                        <SelectContent>
-                          {drugs.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell><Input className="h-9" type="number" placeholder="0" value={row.qty} onChange={(e) => updateRow(idx, "qty", e.target.value)} /></TableCell>
-                    <TableCell>
-                      <Select value={row.unit} onValueChange={(v) => updateRow(idx, "unit", v)}>
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Satuan" /></SelectTrigger>
-                        <SelectContent>
-                          {useSettingsStore.getState().masterData.units.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell><Input className="h-9" placeholder="B-2026-XXX" value={row.batch} onChange={(e) => updateRow(idx, "batch", e.target.value)} /></TableCell>
-                    <TableCell><Input className="h-9" type="month" value={row.ed} onChange={(e) => updateRow(idx, "ed", e.target.value)} /></TableCell>
-                    <TableCell><Input className="h-9" type="number" placeholder="0" value={row.buyPrice} onChange={(e) => updateRow(idx, "buyPrice", e.target.value)} /></TableCell>
-                    <TableCell className="text-right text-xs font-semibold text-primary">{ppnPrice > 0 ? `Rp ${ppnPrice.toLocaleString("id-ID")}` : "—"}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeRow(idx)} disabled={items.length === 1}>✕</Button>
-                    </TableCell>
+            <div className="rounded-lg border overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nama Obat</TableHead>
+                    <TableHead className="w-20">Qty</TableHead>
+                    <TableHead className="w-28">Satuan</TableHead>
+                    <TableHead>No. Batch</TableHead>
+                    <TableHead className="w-32">Exp. Date</TableHead>
+                    <TableHead className="w-32">Harga Beli</TableHead>
+                    <TableHead className="w-32">+ PPN ({business.ppnPercent}%)</TableHead>
+                    <TableHead className="w-12"></TableHead>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                </TableHeader>
+                <TableBody>
+                  {items.map((row, idx) => {
+                    const ppnPrice = row.buyPrice ? Math.round(Number(row.buyPrice) * (1 + business.ppnPercent / 100)) : 0;
+                    return (
+                      <TableRow key={idx}>
+                        <TableCell>
+                          <Select value={row.drugId} onValueChange={(v) => updateRow(idx, "drugId", v)}>
+                            <SelectTrigger className="h-9"><SelectValue placeholder="Pilih obat" /></SelectTrigger>
+                            <SelectContent>
+                              {drugs.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell><Input className="h-9" type="number" placeholder="0" value={row.qty} onChange={(e) => updateRow(idx, "qty", e.target.value)} /></TableCell>
+                        <TableCell>
+                          <Select value={row.unit} onValueChange={(v) => updateRow(idx, "unit", v)}>
+                            <SelectTrigger className="h-9"><SelectValue placeholder="Satuan" /></SelectTrigger>
+                            <SelectContent>
+                              {useSettingsStore.getState().masterData.units.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell><Input className="h-9" placeholder="B-2026-XXX" value={row.batch} onChange={(e) => updateRow(idx, "batch", e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-9" type="month" value={row.ed} onChange={(e) => updateRow(idx, "ed", e.target.value)} /></TableCell>
+                        <TableCell><Input className="h-9" type="number" placeholder="0" value={row.buyPrice} onChange={(e) => updateRow(idx, "buyPrice", e.target.value)} /></TableCell>
+                        <TableCell className="text-right text-xs font-semibold text-primary">{ppnPrice > 0 ? formatRupiah(ppnPrice) : "—"}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeRow(idx)} disabled={items.length === 1}>✕</Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
 
-        <div className="flex justify-between">
-          <Button variant="outline" size="sm" onClick={addRow}><Plus className="w-4 h-4 mr-1" /> Tambah Baris</Button>
-          <Button onClick={handleSubmit} className="gap-2"><Save className="w-4 h-4" /> Simpan GRN</Button>
-        </div>
+            <div className="flex justify-between">
+              <Button variant="outline" size="sm" onClick={addRow}><Plus className="w-4 h-4 mr-1" /> Tambah Baris</Button>
+              <Button onClick={handleSubmit} className="gap-2"><Save className="w-4 h-4" /> Simpan GRN</Button>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
@@ -497,45 +519,51 @@ const StokOpnameTab = () => {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="rounded-lg border overflow-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama Obat</TableHead>
-                <TableHead>Rak</TableHead>
-                <TableHead className="text-right">Stok Sistem</TableHead>
-                <TableHead className="w-28 text-right">Stok Fisik</TableHead>
-                <TableHead className="text-right">Selisih</TableHead>
-                <TableHead>Keterangan</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {opnameData.map((item, idx) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.name}</TableCell>
-                  <TableCell>{item.rack}</TableCell>
-                  <TableCell className="text-right">{item.stock}</TableCell>
-                  <TableCell>
-                    <Input className="h-9 text-right" type="number" placeholder="—" value={item.physicalStock} onChange={(e) => updateOpname(idx, "physicalStock", e.target.value)} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {item.physicalStock !== "" && (
-                      <span className={item.difference === 0 ? "text-primary font-semibold" : "text-destructive font-bold"}>
-                        {item.difference > 0 ? `+${item.difference}` : item.difference}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Input className="h-9" placeholder="Catatan..." value={item.note} onChange={(e) => updateOpname(idx, "note", e.target.value)} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        <div className="flex justify-end mt-4">
-          <Button onClick={handleSubmit} className="gap-2"><Save className="w-4 h-4" /> Simpan Hasil Opname</Button>
-        </div>
+        {drugs.length === 0 ? (
+          <p className="text-center py-8 text-sm text-muted-foreground">Belum ada data obat untuk opname.</p>
+        ) : (
+          <>
+            <div className="rounded-lg border overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nama Obat</TableHead>
+                    <TableHead>Rak</TableHead>
+                    <TableHead className="text-right">Stok Sistem</TableHead>
+                    <TableHead className="w-28 text-right">Stok Fisik</TableHead>
+                    <TableHead className="text-right">Selisih</TableHead>
+                    <TableHead>Keterangan</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {opnameData.map((item, idx) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell>{item.rack}</TableCell>
+                      <TableCell className="text-right">{item.stock}</TableCell>
+                      <TableCell>
+                        <Input className="h-9 text-right" type="number" placeholder="—" value={item.physicalStock} onChange={(e) => updateOpname(idx, "physicalStock", e.target.value)} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {item.physicalStock !== "" && (
+                          <span className={item.difference === 0 ? "text-primary font-semibold" : "text-destructive font-bold"}>
+                            {item.difference > 0 ? `+${item.difference}` : item.difference}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Input className="h-9" placeholder="Catatan..." value={item.note} onChange={(e) => updateOpname(idx, "note", e.target.value)} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="flex justify-end mt-4">
+              <Button onClick={handleSubmit} className="gap-2"><Save className="w-4 h-4" /> Simpan Hasil Opname</Button>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
