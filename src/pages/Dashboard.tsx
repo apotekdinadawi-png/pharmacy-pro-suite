@@ -9,33 +9,29 @@ import {
 import { useInventoryStore } from "@/stores/useInventoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useProcurementStore } from "@/stores/useProcurementStore";
-import { formatRupiah, formatNumber } from "@/lib/currency";
+import { formatRupiah } from "@/lib/currency";
 
 const peakHoursData = [
-  { jam: "08", pelanggan: 12 }, { jam: "09", pelanggan: 25 }, { jam: "10", pelanggan: 38 },
-  { jam: "11", pelanggan: 32 }, { jam: "12", pelanggan: 20 }, { jam: "13", pelanggan: 15 },
-  { jam: "14", pelanggan: 28 }, { jam: "15", pelanggan: 35 }, { jam: "16", pelanggan: 42 },
-  { jam: "17", pelanggan: 30 }, { jam: "18", pelanggan: 22 }, { jam: "19", pelanggan: 18 },
-  { jam: "20", pelanggan: 8 },
-];
-
-const summaryCards = [
-  { title: "Penjualan Hari Ini", value: "Rp 4.250.000", change: "+12%", icon: DollarSign, color: "gradient-primary" },
-  { title: "Total Transaksi", value: "47", change: "+8%", icon: ShoppingCart, color: "gradient-accent" },
-  { title: "Profit Hari Ini", value: "Rp 1.380.000", change: "+5%", icon: TrendingUp, color: "gradient-primary" },
-  { title: "Pelanggan", value: "39", change: "+15%", icon: Users, color: "gradient-accent" },
+  { jam: "08", pelanggan: 0 }, { jam: "09", pelanggan: 0 }, { jam: "10", pelanggan: 0 },
+  { jam: "11", pelanggan: 0 }, { jam: "12", pelanggan: 0 }, { jam: "13", pelanggan: 0 },
+  { jam: "14", pelanggan: 0 }, { jam: "15", pelanggan: 0 }, { jam: "16", pelanggan: 0 },
+  { jam: "17", pelanggan: 0 }, { jam: "18", pelanggan: 0 }, { jam: "19", pelanggan: 0 },
+  { jam: "20", pelanggan: 0 },
 ];
 
 const Dashboard = () => {
-  const { drugs, priceAlerts, grnEntries } = useInventoryStore();
+  const { drugs, priceAlerts, grnEntries, transactions } = useInventoryStore();
   const { inventory } = useSettingsStore();
   const { invoiceTrackers } = useProcurementStore();
 
-  // Dynamic critical stock from settings threshold
   const criticalStock = drugs.filter((d) => d.stock <= inventory.stokKritis);
 
-  // Dynamic expiry — pull from GRN entries with exp dates
   const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const todayTx = transactions.filter((t) => t.date === todayStr);
+  const todaySales = todayTx.reduce((sum, t) => sum + t.total, 0);
+  const todayCount = todayTx.length;
+
   const expiryItems = grnEntries.flatMap((grn) =>
     grn.items.filter((i) => i.expDate).map((i) => {
       const expDate = new Date(i.expDate + "-01");
@@ -44,20 +40,25 @@ const Dashboard = () => {
     })
   ).filter((i) => i.months <= inventory.reminderKadaluwarsa).slice(0, 6);
 
-  // Dynamic invoice countdown
   const unpaidInvoices = invoiceTrackers.filter((t) => t.status === 'Belum Bayar').map((t) => {
     const daysLeft = Math.ceil((new Date(t.dueDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     return { ...t, daysLeft };
   }).sort((a, b) => a.daysLeft - b.daysLeft).slice(0, 5);
 
+  const summaryCards = [
+    { title: "Penjualan Hari Ini", value: formatRupiah(todaySales), change: `${todayCount} transaksi`, icon: DollarSign, color: "gradient-primary" },
+    { title: "Total Transaksi", value: transactions.length.toLocaleString('id-ID'), change: "Semua waktu", icon: ShoppingCart, color: "gradient-accent" },
+    { title: "Total Produk", value: drugs.length.toLocaleString('id-ID'), change: `${criticalStock.length} kritis`, icon: Package, color: "gradient-primary" },
+    { title: "Stok Kritis", value: criticalStock.length.toLocaleString('id-ID'), change: `≤ ${inventory.stokKritis} unit`, icon: AlertTriangle, color: "gradient-accent" },
+  ];
+
   return (
     <div className="p-6 space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Selamat datang kembali! Data dinamis dari Pengaturan & Inventaris.</p>
+        <p className="text-muted-foreground text-sm">Data real-time dari Inventaris, Transaksi, dan Pengadaan.</p>
       </div>
 
-      {/* Price alerts */}
       {priceAlerts.length > 0 && (
         <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 flex items-start gap-2">
           <Bell className="w-4 h-4 text-warning mt-0.5 shrink-0" />
@@ -70,7 +71,6 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {summaryCards.map((card) => (
           <Card key={card.title} className="glass-card overflow-hidden">
@@ -79,7 +79,7 @@ const Dashboard = () => {
                 <div>
                   <p className="text-sm text-muted-foreground">{card.title}</p>
                   <p className="text-2xl font-bold text-foreground mt-1">{card.value}</p>
-                  <span className="text-xs font-medium text-primary">{card.change} dari kemarin</span>
+                  <span className="text-xs font-medium text-primary">{card.change}</span>
                 </div>
                 <div className={`w-10 h-10 rounded-xl ${card.color} flex items-center justify-center`}>
                   <card.icon className="w-5 h-5 text-primary-foreground" />
@@ -91,7 +91,6 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Peak Hours Chart */}
         <Card className="glass-card lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -111,7 +110,6 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Critical Stock — Dynamic from Settings.stokKritis */}
         <Card className="glass-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -121,7 +119,9 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             {criticalStock.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Semua stok aman 👍</p>
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {drugs.length === 0 ? "Belum ada data obat. Input di Inventaris." : "Semua stok aman 👍"}
+              </p>
             ) : criticalStock.map((item) => (
               <div key={item.id} className="flex items-center justify-between p-2.5 rounded-lg bg-destructive/5 border border-destructive/10">
                 <div>
@@ -136,7 +136,6 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Expiry Reminder — Dynamic from Settings.reminderKadaluwarsa */}
         <Card className="glass-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -146,7 +145,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent className="space-y-3">
             {expiryItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Tidak ada obat mendekati kadaluwarsa. Input Barang Masuk untuk tracking.</p>
+              <p className="text-sm text-muted-foreground text-center py-4">Tidak ada obat mendekati kadaluwarsa.</p>
             ) : expiryItems.map((item, i) => (
               <div key={i} className={`flex items-center justify-between p-2.5 rounded-lg border ${item.months <= 1 ? "bg-destructive/5 border-destructive/15" : "bg-warning/5 border-warning/15"}`}>
                 <div>
@@ -162,7 +161,6 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Invoice Status — Dynamic from Procurement store */}
         <Card className="glass-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
