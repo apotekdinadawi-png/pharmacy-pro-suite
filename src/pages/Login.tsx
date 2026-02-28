@@ -5,45 +5,41 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Eye, EyeOff, Pill, AlertCircle } from "lucide-react";
-import { useAuthContext } from "@/contexts/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn, user } = useAuthContext();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Redirect if already logged in
-  if (user) {
-    navigate("/dashboard", { replace: true });
-    return null;
-  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    const { error: err } = await signIn(email, password);
-    if (err) {
-      setError("Email atau password salah. Silakan coba lagi.");
-    } else {
+    // Mock login - will be replaced with real auth
+    await new Promise((r) => setTimeout(r, 800));
+
+    if (username === "admin" && password === "admin") {
       navigate("/dashboard");
+    } else {
+      setError("Username atau password yang Anda masukkan salah. Silakan coba lagi.");
     }
     setLoading(false);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background relative overflow-hidden">
+      {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full gradient-primary opacity-10 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full gradient-accent opacity-10 blur-3xl" />
       </div>
 
       <div className="w-full max-w-md px-4 animate-fade-in">
+        {/* Logo & Brand */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl gradient-primary shadow-lg mb-4">
             <Pill className="w-10 h-10 text-primary-foreground" />
@@ -63,13 +59,12 @@ const Login = () => {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="username">Username</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="Masukkan email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="username"
+                  placeholder="Masukkan username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   required
                   autoFocus
                 />
@@ -110,7 +105,7 @@ const Login = () => {
               </Button>
 
               <p className="text-xs text-center text-muted-foreground">
-                Hubungi Admin/APJ untuk mendapatkan akun akses.
+                Demo: username <span className="font-mono text-foreground">admin</span> / password <span className="font-mono text-foreground">admin</span>
               </p>
             </form>
           </CardContent>

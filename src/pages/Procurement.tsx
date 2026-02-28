@@ -8,26 +8,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Truck, FileText, ShieldAlert, Building2, Calendar, Plus, Printer, Search, X, Save, Check, Pencil, Trash2, History
+  Truck, FileText, ShieldAlert, Building2, Calendar, Plus, Printer, Search, X, Save, Check, Pencil, Trash2
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/hooks/use-toast";
-import { useProcurementStore, type Supplier, type SPItem, type SPRecord } from "@/stores/useProcurementStore";
+import { useProcurementStore, type Supplier } from "@/stores/useProcurementStore";
 import { useInventoryStore } from "@/stores/useInventoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { formatRupiah } from "@/lib/currency";
 
-// ========== UNIFIED SP PRINT FUNCTION ==========
-const printSPUnified = (
-  spNo: string,
-  spType: string,
-  supplier: Supplier,
-  items: SPItem[],
-  business: ReturnType<typeof useSettingsStore.getState>['business'],
-  apotekerPemesan?: string
-) => {
+type SPItem = { itemName: string; qty: string; unit: string; keterangan: string; hargaSatuan: string; diskon: string };
+
+const printSP = (supplier: Supplier, items: SPItem[], business: ReturnType<typeof useSettingsStore.getState>['business']) => {
   const now = new Date();
-  const isSpecial = ['Narkotika', 'Psikotropika', 'Prekursor', 'Obat-Obat Tertentu'].includes(spType);
+  const spNo = `PO${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}${String(Math.floor(Math.random() * 999)).padStart(3, "0")}`;
   const w = window.open("", "_blank", "width=800,height=1100");
   if (!w) return;
 
@@ -42,23 +36,23 @@ const printSPUnified = (
       <td style="border:1px solid #000;padding:6px;text-align:center">${it.qty}</td>
       <td style="border:1px solid #000;padding:6px;text-align:center">${it.unit}</td>
       <td style="border:1px solid #000;padding:6px;text-align:right">${new Intl.NumberFormat('id-ID').format(harga)}</td>
-      <td style="border:1px solid #000;padding:6px;text-align:center">${diskon}%</td>
-      <td style="border:1px solid #000;padding:6px;text-align:right">${new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(total)}</td>
+      <td style="border:1px solid #000;padding:6px;text-align:center">${diskon} %</td>
+      <td style="border:1px solid #000;padding:6px;text-align:right">${new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2 }).format(total)}</td>
     </tr>`;
   }).join('');
 
-  w.document.write(`<html><head><title>Surat Pesanan ${spType}</title>
+  const city = business.alamat ? business.alamat.split(',').pop()?.trim() || '' : '';
+
+  w.document.write(`<html><head><title>Surat Pesanan</title>
     <style>
       body{font-family:'Times New Roman',serif;font-size:13px;padding:40px;max-width:750px;margin:auto;line-height:1.5}
       .header-left{float:left;width:55%} .header-right{float:right;width:40%;text-align:right}
       .clear{clear:both} table.items{width:100%;border-collapse:collapse;margin:16px 0}
       .bold{font-weight:bold} .center{text-align:center} .right{text-align:right}
       .title{font-size:28px;font-weight:bold;text-align:right;margin-bottom:0}
-      ${isSpecial ? '.special-badge{border:2px solid red;padding:4px 12px;display:inline-block;color:red;font-weight:bold;margin-top:4px}' : ''}
     </style></head><body>
     <div>
       <div class="header-left">
-        ${business.logoUrl ? `<img src="${business.logoUrl}" style="height:50px;margin-bottom:4px" />` : ''}
         <div class="bold" style="font-size:16px">${business.namaApotek}</div>
         <div>No. Surat Izin Apotek : ${business.noSIA}</div>
         <div>${business.alamat}</div>
@@ -67,7 +61,6 @@ const printSPUnified = (
       <div class="header-right">
         <div class="title">SURAT</div>
         <div class="title">PESANAN</div>
-        ${isSpecial ? `<div class="special-badge">⚠ ${spType.toUpperCase()}</div>` : ''}
       </div>
       <div class="clear"></div>
     </div>
@@ -76,18 +69,17 @@ const printSPUnified = (
       <tr>
         <td width="50%">
           <table>
-            <tr><td width="120">Nama Supplier</td><td>: ${supplier.name}</td></tr>
+            <tr><td width="100">Nama Supplier</td><td>: ${supplier.name}</td></tr>
             <tr><td>No. Telp</td><td>: ${supplier.phone}</td></tr>
             <tr><td>Alamat</td><td>: ${supplier.address}</td></tr>
           </table>
         </td>
         <td width="50%">
           <table>
-            <tr><td width="120">APJ</td><td>: ${business.namaAPJ}</td></tr>
-            <tr><td>Tanggal</td><td>: ${now.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td></tr>
+            <tr><td width="80">APJ</td><td>: ${business.namaAPJ}</td></tr>
+            <tr><td>Tanggal</td><td>: ${now.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} ${now.toLocaleTimeString('id-ID')}</td></tr>
             <tr><td>No. PO</td><td>: ${spNo}</td></tr>
-            <tr><td>Jenis SP</td><td>: ${spType}</td></tr>
-            ${apotekerPemesan ? `<tr><td>Pemesan</td><td>: ${apotekerPemesan}</td></tr>` : ''}
+            <tr><td>Jenis</td><td>: NON KONSINYASI</td></tr>
           </table>
         </td>
       </tr>
@@ -114,10 +106,9 @@ const printSPUnified = (
       </div>
       <div style="width:45%;text-align:center">
         <div>${business.namaApotek}</div>
-        <div>Apoteker Pengelola Apotek (APA)</div>
-        <div style="height:50px"></div>
+        <div style="height:70px"></div>
         <div class="bold">${business.namaAPJ}</div>
-        <div>SIPA: ${business.noSIPA}</div>
+        <div>No. SIPA ${business.noSIPA}</div>
       </div>
     </div>
     </body></html>`);
@@ -125,19 +116,30 @@ const printSPUnified = (
   w.print();
 };
 
-// ========== SP TAB (Reguler) ==========
+const printSPKhusus = (spType: string, supplier: Supplier, items: SPItem[], business: ReturnType<typeof useSettingsStore.getState>['business']) => {
+  const now = new Date();
+  const spNo = `SP-${spType.charAt(0)}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}-${String(Math.floor(Math.random() * 999)).padStart(3, "0")}`;
+  const isSpecial = spType === "Narkotika" || spType === "Psikotropika";
+  const w = window.open("", "_blank", "width=700,height=900");
+  if (!w) return;
+  w.document.write(`<html><head><title>SP ${spType}</title><style>body{font-family:'Times New Roman',serif;font-size:14px;padding:40px;max-width:650px;margin:auto;line-height:1.6}.center{text-align:center}.bold{font-weight:bold}table.items{width:100%;border-collapse:collapse;margin:16px 0}table.items th,table.items td{border:1px solid #000;padding:6px 10px}table.items th{background:#f0f0f0}.header{border:${isSpecial?"3px solid red":"2px solid #000"};padding:16px;margin-bottom:20px}.stamp{border:2px solid red;padding:4px 12px;display:inline-block;color:red;font-weight:bold}</style></head><body>
+  <div class="header"><div class="center"><div class="bold" style="font-size:18px">SURAT PESANAN ${spType.toUpperCase()}</div>${isSpecial?`<div class="stamp">⚠ ${spType.toUpperCase()}</div>`:""}<div>No: ${spNo}</div><div>Tanggal: ${now.toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})}</div></div></div>
+  <table style="margin:8px 0"><tr><td width="140">Nama Apoteker</td><td>: ${business.namaAPJ}</td></tr><tr><td>No. SIPA</td><td>: ${business.noSIPA}</td></tr><tr><td>Nama Apotek</td><td>: ${business.namaApotek}</td></tr><tr><td>No. SIA</td><td>: ${business.noSIA}</td></tr><tr><td>Alamat</td><td>: ${business.alamat}</td></tr></table>
+  <p>Kepada: <b>${supplier.name}</b> — ${supplier.address}</p>
+  <table class="items"><tr><th>No</th><th>Nama Obat</th><th>Jumlah</th><th>Satuan</th><th>Ket</th></tr>${items.filter(i=>i.itemName&&i.qty).map((it,i)=>`<tr><td>${i+1}</td><td>${it.itemName}</td><td>${it.qty}</td><td>${it.unit}</td><td>${it.keterangan||"-"}</td></tr>`).join("")}</table>
+  <div style="margin-top:40px;text-align:right;width:250px;margin-left:auto"><p>Apoteker Pengelola Apotek (APA)</p><div style="height:60px"></div><p class="bold">${business.namaAPJ}</p><p>SIPA: ${business.noSIPA}</p></div></body></html>`);
+  w.document.close(); w.print();
+};
+
 const SPOtomatisTab = () => {
-  const { suppliers, addSPRecord, getNextSPNo } = useProcurementStore();
+  const { suppliers } = useProcurementStore();
   const { drugs } = useInventoryStore();
   const { business } = useSettingsStore();
   const lowStock = drugs.filter((d) => d.stock <= d.minStock);
 
   const [selectedSupplier, setSelectedSupplier] = useState("");
-  const [apotekerPemesan, setApotekerPemesan] = useState("");
   const [spItems, setSpItems] = useState<SPItem[]>(
-    lowStock.length > 0
-      ? lowStock.map((i) => ({ itemName: i.name, qty: String(i.minStock * 2), unit: "Box", keterangan: "", hargaSatuan: "", diskon: "0" }))
-      : [{ itemName: "", qty: "", unit: "Box", keterangan: "", hargaSatuan: "", diskon: "0" }]
+    lowStock.map((i) => ({ itemName: i.name, qty: String(i.minStock * 2), unit: "Box", keterangan: "", hargaSatuan: "", diskon: "0" }))
   );
 
   const addRow = () => setSpItems([...spItems, { itemName: "", qty: "", unit: "Box", keterangan: "", hargaSatuan: "", diskon: "0" }]);
@@ -148,37 +150,28 @@ const SPOtomatisTab = () => {
     const supplier = suppliers.find((s) => s.id === selectedSupplier);
     if (!supplier) { toast({ title: "Error", description: "Pilih supplier.", variant: "destructive" }); return; }
     if (spItems.some((i) => !i.itemName || !i.qty)) { toast({ title: "Error", description: "Lengkapi semua item.", variant: "destructive" }); return; }
-
-    const spNo = getNextSPNo('REG');
-    addSPRecord({
-      spNo, spType: 'REG', supplierId: supplier.id, supplierName: supplier.name,
-      apotekerPemesan, items: spItems, date: new Date().toISOString(), printed: true,
-    });
-    printSPUnified(spNo, 'Reguler', supplier, spItems, business, apotekerPemesan);
-    toast({ title: "SP Dicetak", description: `No. PO: ${spNo}` });
+    printSP(supplier, spItems, business);
+    toast({ title: "SP Dicetak" });
   };
 
   return (
     <Card className="glass-card">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> Surat Pesanan Reguler</CardTitle>
+        <CardTitle className="text-base flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> Surat Pesanan</CardTitle>
+        <p className="text-xs text-muted-foreground">Format sesuai standar apotek. Header otomatis dari Pengaturan.{lowStock.length > 0 && ` ${lowStock.length} obat stok rendah.`}</p>
       </CardHeader>
       <CardContent className="space-y-4">
         {suppliers.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Tambahkan supplier terlebih dahulu di tab Supplier.</p>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Supplier *</Label>
                 <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
                   <SelectTrigger><SelectValue placeholder="Pilih PBF" /></SelectTrigger>
                   <SelectContent>{suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Apoteker Pemesan</Label>
-                <Input value={apotekerPemesan} onChange={(e) => setApotekerPemesan(e.target.value)} placeholder="Nama apoteker yang memesan" />
               </div>
             </div>
             <div className="rounded-lg border overflow-auto">
@@ -197,7 +190,7 @@ const SPOtomatisTab = () => {
                         </Select>
                       </TableCell>
                       <TableCell><Input className="h-9" type="number" value={item.hargaSatuan} onChange={(e) => updateRow(idx, "hargaSatuan", e.target.value)} /></TableCell>
-                      <TableCell><Input className="h-9" value={item.diskon} onChange={(e) => updateRow(idx, "diskon", e.target.value)} placeholder="0%" /></TableCell>
+                      <TableCell><Input className="h-9" value={item.diskon} onChange={(e) => updateRow(idx, "diskon", e.target.value)} placeholder="0 %" /></TableCell>
                       <TableCell><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeRow(idx)} disabled={spItems.length === 1}><X className="w-3 h-3" /></Button></TableCell>
                     </TableRow>
                   ))}
@@ -215,17 +208,17 @@ const SPOtomatisTab = () => {
   );
 };
 
-// ========== SP KHUSUS TAB ==========
 const SPKhususTab = () => {
-  const { suppliers, addSPRecord, getNextSPNo } = useProcurementStore();
+  const { suppliers } = useProcurementStore();
   const { business } = useSettingsStore();
-  const [spType, setSpType] = useState<"Narkotika" | "Psikotropika" | "Prekursor" | "Obat-Obat Tertentu">("Narkotika");
+  const [spType, setSpType] = useState<"Narkotika" | "Psikotropika" | "Prekursor">("Narkotika");
   const [selectedSupplier, setSelectedSupplier] = useState("");
-  const [apotekerPemesan, setApotekerPemesan] = useState("");
   const [items, setItems] = useState<SPItem[]>([{ itemName: "", qty: "", unit: "Box", keterangan: "", hargaSatuan: "", diskon: "0" }]);
 
-  const spTypeMap: Record<string, SPRecord['spType']> = {
-    "Narkotika": "NAR", "Psikotropika": "PSI", "Prekursor": "PRE", "Obat-Obat Tertentu": "OOT",
+  const specialItems: Record<string, string[]> = {
+    Narkotika: ["Codein 10mg", "Codein 15mg", "Morphin 10mg", "Pethidine 50mg"],
+    Psikotropika: ["Diazepam 2mg", "Diazepam 5mg", "Alprazolam 0.5mg", "Phenobarbital 30mg"],
+    Prekursor: ["Pseudoephedrine 60mg", "Ephedrine HCl", "Ergotamine"],
   };
 
   const addRow = () => setItems([...items, { itemName: "", qty: "", unit: "Box", keterangan: "", hargaSatuan: "", diskon: "0" }]);
@@ -235,27 +228,20 @@ const SPKhususTab = () => {
   const handlePrint = () => {
     const supplier = suppliers.find((s) => s.id === selectedSupplier);
     if (!supplier) { toast({ title: "Error", description: "Pilih supplier.", variant: "destructive" }); return; }
-
-    const code = spTypeMap[spType];
-    const spNo = getNextSPNo(code);
-    addSPRecord({
-      spNo, spType: code, supplierId: supplier.id, supplierName: supplier.name,
-      apotekerPemesan, items, date: new Date().toISOString(), printed: true,
-    });
-    printSPUnified(spNo, spType, supplier, items, business, apotekerPemesan);
-    toast({ title: `SP ${spType} Dicetak`, description: `No. PO: ${spNo}` });
+    printSPKhusus(spType, supplier, items, business);
+    toast({ title: `SP ${spType} Dicetak` });
   };
 
   return (
     <Card className="glass-card">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-destructive" /> SP Khusus</CardTitle>
+        <CardTitle className="text-base flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-destructive" /> SP Khusus (Narkotika / Psikotropika / Prekursor)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex gap-2 flex-wrap">
-          {(["Narkotika", "Psikotropika", "Prekursor", "Obat-Obat Tertentu"] as const).map((t) => (
+          {(["Narkotika", "Psikotropika", "Prekursor"] as const).map((t) => (
             <Button key={t} variant={spType === t ? "default" : "outline"} size="sm"
-              className={spType === t && (t === "Narkotika" || t === "Psikotropika") ? "bg-destructive hover:bg-destructive/90" : ""}
+              className={spType === t && t === "Narkotika" ? "bg-destructive hover:bg-destructive/90" : ""}
               onClick={() => { setSpType(t); setItems([{ itemName: "", qty: "", unit: "Box", keterangan: "", hargaSatuan: "", diskon: "0" }]); }}>{t}</Button>
           ))}
         </div>
@@ -263,7 +249,7 @@ const SPKhususTab = () => {
           <p className="text-sm text-muted-foreground text-center py-8">Tambahkan supplier terlebih dahulu.</p>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Supplier *</Label>
                 <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
@@ -271,28 +257,27 @@ const SPKhususTab = () => {
                   <SelectContent>{suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label>Apoteker Pemesan</Label>
-                <Input value={apotekerPemesan} onChange={(e) => setApotekerPemesan(e.target.value)} placeholder="Nama apoteker" />
-              </div>
             </div>
             <div className="rounded-lg border overflow-auto">
               <Table>
-                <TableHeader><TableRow><TableHead>Nama Obat</TableHead><TableHead>Keterangan</TableHead><TableHead className="w-20">Qty</TableHead><TableHead className="w-24">Satuan</TableHead><TableHead className="w-28">Harga</TableHead><TableHead className="w-20">Diskon</TableHead><TableHead className="w-10"></TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Nama Obat {spType}</TableHead><TableHead className="w-20">Qty</TableHead><TableHead className="w-24">Satuan</TableHead><TableHead>Keterangan</TableHead><TableHead className="w-10"></TableHead></TableRow></TableHeader>
                 <TableBody>
                   {items.map((item, idx) => (
                     <TableRow key={idx}>
-                      <TableCell><Input className="h-9" value={item.itemName} onChange={(e) => updateRow(idx, "itemName", e.target.value)} placeholder={`Nama obat ${spType}`} /></TableCell>
-                      <TableCell><Input className="h-9" value={item.keterangan} onChange={(e) => updateRow(idx, "keterangan", e.target.value)} /></TableCell>
+                      <TableCell>
+                        <Select value={item.itemName} onValueChange={(v) => updateRow(idx, "itemName", v)}>
+                          <SelectTrigger className="h-9"><SelectValue placeholder={`Pilih ${spType}`} /></SelectTrigger>
+                          <SelectContent>{specialItems[spType].map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </TableCell>
                       <TableCell><Input className="h-9" type="number" value={item.qty} onChange={(e) => updateRow(idx, "qty", e.target.value)} /></TableCell>
                       <TableCell>
                         <Select value={item.unit} onValueChange={(v) => updateRow(idx, "unit", v)}>
                           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                          <SelectContent><SelectItem value="Box">Box</SelectItem><SelectItem value="Ampul">Ampul</SelectItem><SelectItem value="Vial">Vial</SelectItem><SelectItem value="Strip">Strip</SelectItem><SelectItem value="Tablet">Tablet</SelectItem></SelectContent>
+                          <SelectContent><SelectItem value="Box">Box</SelectItem><SelectItem value="Ampul">Ampul</SelectItem><SelectItem value="Vial">Vial</SelectItem><SelectItem value="Strip">Strip</SelectItem></SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell><Input className="h-9" type="number" value={item.hargaSatuan} onChange={(e) => updateRow(idx, "hargaSatuan", e.target.value)} /></TableCell>
-                      <TableCell><Input className="h-9" value={item.diskon} onChange={(e) => updateRow(idx, "diskon", e.target.value)} placeholder="0%" /></TableCell>
+                      <TableCell><Input className="h-9" value={item.keterangan} onChange={(e) => updateRow(idx, "keterangan", e.target.value)} /></TableCell>
                       <TableCell><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeRow(idx)} disabled={items.length === 1}><X className="w-3 h-3" /></Button></TableCell>
                     </TableRow>
                   ))}
@@ -310,98 +295,16 @@ const SPKhususTab = () => {
   );
 };
 
-// ========== RIWAYAT SP TAB (with Edit) ==========
-const RiwayatSPTab = () => {
-  const { spRecords, updateSPRecord, removeSPRecord, suppliers } = useProcurementStore();
-  const { business } = useSettingsStore();
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<Partial<SPRecord>>({});
-
-  const spTypeLabel: Record<string, string> = { REG: 'Reguler', OOT: 'Obat-Obat Tertentu', PRE: 'Prekursor', PSI: 'Psikotropika', NAR: 'Narkotika' };
-
-  const startEdit = (sp: SPRecord) => {
-    setEditId(sp.id);
-    setEditData({ apotekerPemesan: sp.apotekerPemesan, items: [...sp.items] });
-  };
-
-  const saveEdit = () => {
-    if (editId && editData) {
-      updateSPRecord(editId, editData);
-      toast({ title: "SP Diperbarui" });
-      setEditId(null);
-    }
-  };
-
-  const handleReprint = (sp: SPRecord) => {
-    const supplier = suppliers.find(s => s.id === sp.supplierId);
-    if (!supplier) return;
-    printSPUnified(sp.spNo, spTypeLabel[sp.spType], supplier, sp.items, business, sp.apotekerPemesan);
-  };
-
-  return (
-    <Card className="glass-card">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center gap-2"><History className="w-4 h-4 text-primary" /> Riwayat Surat Pesanan</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {spRecords.length === 0 ? (
-          <p className="text-center py-8 text-sm text-muted-foreground">Belum ada riwayat SP. Buat SP baru di tab Surat Pesanan.</p>
-        ) : (
-          <div className="rounded-lg border overflow-auto">
-            <Table>
-              <TableHeader><TableRow><TableHead>No. PO</TableHead><TableHead>Jenis</TableHead><TableHead>Supplier</TableHead><TableHead>Pemesan</TableHead><TableHead>Tanggal</TableHead><TableHead>Items</TableHead><TableHead className="w-32"></TableHead></TableRow></TableHeader>
-              <TableBody>
-                {spRecords.slice().reverse().map((sp) => (
-                  <TableRow key={sp.id}>
-                    <TableCell className="font-mono text-xs">{sp.spNo}</TableCell>
-                    <TableCell><Badge variant={sp.spType === 'NAR' || sp.spType === 'PSI' ? 'destructive' : 'secondary'} className="text-xs">{spTypeLabel[sp.spType]}</Badge></TableCell>
-                    <TableCell className="text-sm">{sp.supplierName}</TableCell>
-                    <TableCell className="text-xs">
-                      {editId === sp.id ? (
-                        <Input className="h-8 text-xs" value={editData.apotekerPemesan || ''} onChange={(e) => setEditData({ ...editData, apotekerPemesan: e.target.value })} />
-                      ) : (sp.apotekerPemesan || '—')}
-                    </TableCell>
-                    <TableCell className="text-xs">{new Date(sp.date).toLocaleDateString('id-ID')}</TableCell>
-                    <TableCell className="text-xs">{sp.items.length} item</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {editId === sp.id ? (
-                          <>
-                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={saveEdit}><Check className="w-3 h-3 mr-1" /> Simpan</Button>
-                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditId(null)}>Batal</Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(sp)}><Pencil className="w-3 h-3" /></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleReprint(sp)}><Printer className="w-3 h-3" /></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { removeSPRecord(sp.id); toast({ title: "Dihapus" }); }}><Trash2 className="w-3 h-3" /></Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-};
-
-// ========== SUPPLIER TAB ==========
 const SupplierTab = () => {
   const { suppliers, addSupplier, updateSupplier, removeSupplier } = useProcurementStore();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const emptyForm: Omit<Supplier, 'id'> = { name: '', address: '', phone: '', email: '', topDays: 30, noIzinPBF: '', noCDOB: '', bankName: '', bankAccount: '', bankAccountName: '' };
-  const [form, setForm] = useState<Omit<Supplier, 'id'>>(emptyForm);
+  const [form, setForm] = useState<Omit<Supplier, 'id'>>({ name: '', address: '', phone: '', email: '', topDays: 30, sipa: '' });
 
   const filtered = suppliers.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()));
 
-  const openAdd = () => { setEditId(null); setForm(emptyForm); setDialogOpen(true); };
+  const openAdd = () => { setEditId(null); setForm({ name: '', address: '', phone: '', email: '', topDays: 30, sipa: '' }); setDialogOpen(true); };
   const openEdit = (s: Supplier) => { setEditId(s.id); const { id, ...rest } = s; setForm(rest); setDialogOpen(true); };
 
   const handleSave = () => {
@@ -434,16 +337,15 @@ const SupplierTab = () => {
         ) : (
           <div className="rounded-lg border overflow-auto">
             <Table>
-              <TableHeader><TableRow><TableHead>Nama PBF</TableHead><TableHead>Alamat</TableHead><TableHead>Telepon</TableHead><TableHead className="text-right">TOP</TableHead><TableHead>No. Izin PBF</TableHead><TableHead>No. CDOB</TableHead><TableHead className="w-24"></TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Nama PBF</TableHead><TableHead>Alamat</TableHead><TableHead>Telepon</TableHead><TableHead className="text-right">TOP (Hari)</TableHead><TableHead>No. Izin</TableHead><TableHead className="w-24"></TableHead></TableRow></TableHeader>
               <TableBody>
                 {filtered.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell className="text-xs">{s.address}</TableCell>
                     <TableCell className="text-xs">{s.phone}</TableCell>
-                    <TableCell className="text-right font-semibold">{s.topDays} hr</TableCell>
-                    <TableCell className="text-xs">{s.noIzinPBF}</TableCell>
-                    <TableCell className="text-xs">{s.noCDOB || '—'}</TableCell>
+                    <TableCell className="text-right font-semibold">{s.topDays}</TableCell>
+                    <TableCell className="text-xs">{s.sipa}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil className="w-3 h-3" /></Button>
@@ -459,7 +361,7 @@ const SupplierTab = () => {
       </CardContent>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent>
           <DialogHeader><DialogTitle>{editId ? "Edit Supplier" : "Tambah PBF Baru"}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5 col-span-2"><Label>Nama PBF *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
@@ -467,11 +369,7 @@ const SupplierTab = () => {
             <div className="space-y-1.5"><Label>Telepon</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
             <div className="space-y-1.5"><Label>Email</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
             <div className="space-y-1.5"><Label>TOP (Hari)</Label><Input type="number" value={form.topDays} onChange={(e) => setForm({ ...form, topDays: Number(e.target.value) })} /></div>
-            <div className="space-y-1.5"><Label>No. Izin PBF</Label><Input value={form.noIzinPBF} onChange={(e) => setForm({ ...form, noIzinPBF: e.target.value })} /></div>
-            <div className="space-y-1.5"><Label>No. Sertifikat CDOB</Label><Input value={form.noCDOB} onChange={(e) => setForm({ ...form, noCDOB: e.target.value })} /></div>
-            <div className="space-y-1.5"><Label>Nama Bank</Label><Input value={form.bankName} onChange={(e) => setForm({ ...form, bankName: e.target.value })} placeholder="BCA, Mandiri, dll" /></div>
-            <div className="space-y-1.5"><Label>No. Rekening</Label><Input value={form.bankAccount} onChange={(e) => setForm({ ...form, bankAccount: e.target.value })} /></div>
-            <div className="space-y-1.5"><Label>Atas Nama</Label><Input value={form.bankAccountName} onChange={(e) => setForm({ ...form, bankAccountName: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>No. Izin (SIPA)</Label><Input value={form.sipa} onChange={(e) => setForm({ ...form, sipa: e.target.value })} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Batal</Button>
@@ -483,7 +381,6 @@ const SupplierTab = () => {
   );
 };
 
-// ========== INVOICE TAB ==========
 const InvoiceTab = () => {
   const { invoiceTrackers, markPaid } = useProcurementStore();
   const today = new Date();
@@ -525,7 +422,7 @@ const InvoiceTab = () => {
                       <TableCell><Badge variant={t.status === 'Lunas' ? "secondary" : "destructive"} className="text-xs">{t.status}</Badge></TableCell>
                       <TableCell>
                         {t.status === 'Belum Bayar' && (
-                          <Button variant="outline" size="sm" className="h-7 gap-1" onClick={() => { markPaid(t.id); toast({ title: "Lunas" }); }}>
+                          <Button variant="outline" size="sm" className="h-7 gap-1" onClick={() => { markPaid(t.id); toast({ title: "Lunas", description: `Faktur ${t.invoiceNo} ditandai lunas.` }); }}>
                             <Check className="w-3 h-3" /> Bayar
                           </Button>
                         )}
@@ -542,7 +439,6 @@ const InvoiceTab = () => {
   );
 };
 
-// ========== MAIN ==========
 const Procurement = () => (
   <div className="p-6 animate-fade-in">
     <h1 className="text-2xl font-bold text-foreground mb-1">Pengadaan</h1>
@@ -550,16 +446,14 @@ const Procurement = () => (
 
     <Tabs defaultValue="sp-auto" className="w-full">
       <TabsList className="mb-4 flex-wrap h-auto gap-1">
-        <TabsTrigger value="sp-auto" className="gap-1.5"><FileText className="w-3.5 h-3.5" /> SP Reguler</TabsTrigger>
+        <TabsTrigger value="sp-auto" className="gap-1.5"><FileText className="w-3.5 h-3.5" /> Surat Pesanan</TabsTrigger>
         <TabsTrigger value="sp-khusus" className="gap-1.5"><ShieldAlert className="w-3.5 h-3.5" /> SP Khusus</TabsTrigger>
-        <TabsTrigger value="riwayat" className="gap-1.5"><History className="w-3.5 h-3.5" /> Riwayat SP</TabsTrigger>
         <TabsTrigger value="supplier" className="gap-1.5"><Building2 className="w-3.5 h-3.5" /> Supplier</TabsTrigger>
         <TabsTrigger value="faktur" className="gap-1.5"><Calendar className="w-3.5 h-3.5" /> Status Faktur</TabsTrigger>
       </TabsList>
 
       <TabsContent value="sp-auto"><SPOtomatisTab /></TabsContent>
       <TabsContent value="sp-khusus"><SPKhususTab /></TabsContent>
-      <TabsContent value="riwayat"><RiwayatSPTab /></TabsContent>
       <TabsContent value="supplier"><SupplierTab /></TabsContent>
       <TabsContent value="faktur"><InvoiceTab /></TabsContent>
     </Tabs>

@@ -1,38 +1,35 @@
 import {
-  LayoutDashboard, ShoppingCart, Package, Truck, BarChart3,
-  Users, Settings, LogOut, Pill, ChevronLeft,
+  LayoutDashboard,
+  ShoppingCart,
+  Package,
+  Truck,
+  BarChart3,
+  Users,
+  Settings,
+  LogOut,
+  Pill,
+  ChevronLeft,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/stores/useSettingsStore";
-import { useAuthContext } from "@/contexts/AuthContext";
-import { roleMenuAccess } from "@/hooks/useAuth";
 
-const allMenuItems = [
-  { key: "dashboard", title: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-  { key: "transactions", title: "Transaksi / Kasir", icon: ShoppingCart, path: "/transactions" },
-  { key: "inventory", title: "Inventaris", icon: Package, path: "/inventory" },
-  { key: "procurement", title: "Pengadaan", icon: Truck, path: "/procurement" },
-  { key: "reports", title: "Laporan", icon: BarChart3, path: "/reports" },
-  { key: "customers", title: "Pelanggan", icon: Users, path: "/customers" },
-  { key: "users", title: "Manajemen User", icon: Users, path: "/users" },
-  { key: "settings", title: "Pengaturan", icon: Settings, path: "/settings" },
+const menuItems = [
+  { title: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+  { title: "Transaksi / Kasir", icon: ShoppingCart, path: "/transactions" },
+  { title: "Inventaris", icon: Package, path: "/inventory" },
+  { title: "Pengadaan", icon: Truck, path: "/procurement" },
+  { title: "Laporan", icon: BarChart3, path: "/reports" },
+  { title: "Pelanggan", icon: Users, path: "/customers" },
+  { title: "Manajemen User", icon: Users, path: "/users" },
+  { title: "Pengaturan", icon: Settings, path: "/settings" },
 ];
 
 const AppSidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const { business } = useSettingsStore();
-  const { signOut, role, profile } = useAuthContext();
-
-  const allowedKeys = role ? roleMenuAccess[role] : allMenuItems.map(m => m.key);
-  const menuItems = allMenuItems.filter(m => allowedKeys.includes(m.key));
-
-  const handleLogout = async () => {
-    await signOut();
-    navigate("/");
-  };
 
   return (
     <aside
@@ -53,19 +50,11 @@ const AppSidebar = () => {
           </div>
         )}
         {!collapsed && (
-          <span className="text-lg font-bold text-sidebar-foreground animate-slide-in-left truncate">
+          <span className="text-lg font-bold text-sidebar-foreground animate-slide-in-left">
             {business.namaApotek}
           </span>
         )}
       </div>
-
-      {/* User info */}
-      {!collapsed && profile && (
-        <div className="px-4 py-2 border-b border-sidebar-border">
-          <p className="text-xs text-sidebar-foreground/70 truncate">{profile.full_name || profile.username}</p>
-          <p className="text-[10px] text-sidebar-foreground/50 capitalize">{role?.replace('_', ' ') || 'User'}</p>
-        </div>
-      )}
 
       {/* Menu */}
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto">
@@ -91,7 +80,7 @@ const AppSidebar = () => {
       {/* Footer */}
       <div className="p-2 border-t border-sidebar-border space-y-1">
         <button
-          onClick={handleLogout}
+          onClick={() => navigate("/")}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-all w-full"
         >
           <LogOut className="w-5 h-5 shrink-0" />

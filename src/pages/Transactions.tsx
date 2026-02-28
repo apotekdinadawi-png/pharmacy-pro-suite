@@ -15,20 +15,21 @@ import { useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useInventoryStore } from "@/stores/useInventoryStore";
-import { useAuthContext } from "@/contexts/AuthContext";
 import { formatRupiah } from "@/lib/currency";
 
 type CartItem = { drugId: string; name: string; price: number; qty: number; unit: string; aturanPakai?: string };
 type PrescriptionData = { doctorName: string; patientName: string; note: string };
 type RacikanItem = { drugId: string; qty: string; unit: string };
 
-const printReceipt = (cart: CartItem[], total: number, payment: string, nominalBayar: number, kasirName: string, prescription?: PrescriptionData) => {
+const printReceipt = (cart: CartItem[], total: number, payment: string, nominalBayar: number, prescription?: PrescriptionData) => {
   const now = new Date();
   const trxId = `TRX-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 9999)).padStart(4, "0")}`;
   const { business, receipt } = useSettingsStore.getState();
   const headerName = receipt.headerLine1 || business.namaApotek;
   const headerAddr = receipt.headerLine2 || business.alamat;
   const headerTelp = receipt.headerLine3 || `Telp: ${business.telepon}`;
+  const footer1 = receipt.footerLine1;
+  const footer2 = receipt.footerLine2;
   const kembalian = nominalBayar - total;
 
   const w = window.open("", "_blank", "width=400,height=600");
@@ -40,11 +41,10 @@ const printReceipt = (cart: CartItem[], total: number, payment: string, nominalB
       table{width:100%;border-collapse:collapse} td{padding:2px 0}
       .right{text-align:right} .bold{font-weight:bold}
     </style></head><body>
-    ${business.logoUrl ? `<div class="center"><img src="${business.logoUrl}" style="height:40px;margin-bottom:4px" /></div>` : ''}
     <div class="center"><b>${headerName}</b><br/>${headerAddr}<br/>${headerTelp}</div>
     ${business.namaAPJ ? `<div class="center" style="font-size:10px">APJ: ${business.namaAPJ} — SIPA: ${business.noSIPA}</div>` : ''}
     <div class="line"></div>
-    <div>No: ${trxId}<br/>Tgl: ${now.toLocaleString("id-ID")}<br/>Kasir: ${kasirName}</div>
+    <div>No: ${trxId}<br/>Tgl: ${now.toLocaleString("id-ID")}<br/>Kasir: Admin</div>
     ${prescription ? `<div>Dokter: ${prescription.doctorName}<br/>Pasien: ${prescription.patientName}</div>` : ""}
     <div class="line"></div>
     <table>${cart.map((c) => `
@@ -58,7 +58,7 @@ const printReceipt = (cart: CartItem[], total: number, payment: string, nominalB
       <tr><td>Kembalian</td><td class="right">${formatRupiah(kembalian)}</td></tr>
     </table>
     <div class="line"></div>
-    <div class="center">${receipt.footerLine1}<br/>${receipt.footerLine2}</div>
+    <div class="center">${footer1}<br/>${footer2}</div>
     </body></html>
   `);
   w.document.close();
@@ -67,7 +67,10 @@ const printReceipt = (cart: CartItem[], total: number, payment: string, nominalB
 
 const printLabel = (cart: CartItem[], apotek: string, patientName?: string) => {
   const items = cart.filter((c) => c.aturanPakai);
-  if (items.length === 0) { toast({ title: "Info", description: "Belum ada aturan pakai yang diisi." }); return; }
+  if (items.length === 0) {
+    toast({ title: "Info", description: "Belum ada aturan pakai yang diisi." });
+    return;
+  }
   const w = window.open("", "_blank", "width=400,height=600");
   if (!w) return;
   w.document.write(`
@@ -93,10 +96,8 @@ const printLabel = (cart: CartItem[], apotek: string, patientName?: string) => {
 
 const Transactions = () => {
   const { drugs, deductStock, addStockCard, addTransaction } = useInventoryStore();
-  const { business, masterData } = useSettingsStore();
-  const { profile } = useAuthContext();
-  const kasirName = profile?.full_name || profile?.username || 'Kasir';
-
+  const { business } = useSettingsStore();
+  const { masterData } = useSettingsStore();
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [nominalBayar, setNominalBayar] = useState<number>(0);
@@ -113,18 +114,29 @@ const Transactions = () => {
   const [etiketItemId, setEtiketItemId] = useState<string | null>(null);
   const [etiketValue, setEtiketValue] = useState("");
 
+  // Smart search: name, barcode, kegunaan
   const filtered = drugs.filter((p) => {
     const q = search.toLowerCase();
     if (!q) return true;
-    return p.name.toLowerCase().includes(q) || p.barcode.toLowerCase().includes(q) || p.kegunaan.toLowerCase().includes(q);
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.barcode.toLowerCase().includes(q) ||
+      p.kegunaan.toLowerCase().includes(q)
+    );
   });
 
   const addToCart = (drug: typeof drugs[0]) => {
-    if (drug.stock <= 0) { toast({ title: "Stok Habis", description: `${drug.name} stok 0.`, variant: "destructive" }); return; }
+    if (drug.stock <= 0) {
+      toast({ title: "Stok Habis", description: `${drug.name} stok 0, tidak bisa ditambahkan.`, variant: "destructive" });
+      return;
+    }
     setCart((prev) => {
       const existing = prev.find((c) => c.drugId === drug.id);
       if (existing) {
-        if (existing.qty >= drug.stock) { toast({ title: "Stok tidak cukup", variant: "destructive" }); return prev; }
+        if (existing.qty >= drug.stock) {
+          toast({ title: "Stok tidak cukup", description: `Stok ${drug.name} hanya ${drug.stock}.`, variant: "destructive" });
+          return prev;
+        }
         return prev.map((c) => c.drugId === drug.id ? { ...c, qty: c.qty + 1 } : c);
       }
       return [...prev, { drugId: drug.id, name: drug.name, price: drug.sellPrice, qty: 1, unit: drug.baseUnit }];
@@ -137,8 +149,13 @@ const Transactions = () => {
 
   const total = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
 
+  // Racikan
   const addRacikanRow = () => setRacikanItems([...racikanItems, { drugId: "", qty: "", unit: "" }]);
-  const updateRacikanRow = (idx: number, field: string, value: string) => { const u = [...racikanItems]; u[idx] = { ...u[idx], [field]: value }; setRacikanItems(u); };
+  const updateRacikanRow = (idx: number, field: string, value: string) => {
+    const updated = [...racikanItems];
+    updated[idx] = { ...updated[idx], [field]: value };
+    setRacikanItems(updated);
+  };
   const removeRacikanRow = (idx: number) => { if (racikanItems.length > 1) setRacikanItems(racikanItems.filter((_, i) => i !== idx)); };
 
   const racikanTotal = racikanItems.reduce((sum, ri) => {
@@ -148,91 +165,126 @@ const Transactions = () => {
 
   const addRacikanToCart = () => {
     const validItems = racikanItems.filter((ri) => ri.drugId && ri.qty);
-    if (validItems.length === 0) { toast({ title: "Error", description: "Tambahkan minimal satu obat.", variant: "destructive" }); return; }
-    setCart((prev) => [...prev, { drugId: `racikan-${Date.now()}`, name: `🧪 ${racikanName}`, price: racikanTotal, qty: 1, unit: "Racikan" }]);
+    if (validItems.length === 0) {
+      toast({ title: "Error", description: "Tambahkan minimal satu obat ke racikan.", variant: "destructive" });
+      return;
+    }
+    const racikanId = `racikan-${Date.now()}`;
+    setCart((prev) => [...prev, { drugId: racikanId, name: `🧪 ${racikanName}`, price: racikanTotal, qty: 1, unit: "Racikan" }]);
     setRacikanOpen(false);
     setRacikanItems([{ drugId: "", qty: "", unit: "" }]);
     setJasaRacik("");
     setRacikanName("Racikan");
-    toast({ title: "Racikan ditambahkan" });
+    toast({ title: "Berhasil", description: "Racikan ditambahkan ke keranjang." });
   };
 
   const handlePay = (method: string) => {
     if (cart.length === 0) return;
     const bayar = nominalBayar || total;
-    if (method === "Tunai" && bayar < total) { toast({ title: "Error", description: "Nominal bayar kurang.", variant: "destructive" }); return; }
+    if (method === "Tunai" && bayar < total) {
+      toast({ title: "Error", description: "Nominal bayar kurang dari total.", variant: "destructive" });
+      return;
+    }
 
+    // Deduct stock & create stock cards
     const now = new Date().toISOString().split('T')[0];
     cart.forEach((item) => {
       if (!item.drugId.startsWith('racikan-')) {
         deductStock(item.drugId, item.qty);
         const drug = drugs.find((d) => d.id === item.drugId);
         addStockCard({
-          date: now, drugName: item.name, type: 'Keluar', qty: item.qty, unit: item.unit,
-          batch: '', expDate: '', source: `Penjualan Kasir`, user: kasirName,
+          date: now,
+          drugName: item.name,
+          type: 'Keluar',
+          qty: item.qty,
+          unit: item.unit,
+          batch: '',
+          expDate: '',
+          source: `Penjualan Kasir`,
+          user: 'Admin',
           stockAfter: Math.max(0, (drug?.stock || 0) - item.qty),
         });
       }
     });
 
+    // Record transaction
     addTransaction({
       date: now,
       items: cart.map((c) => ({ drugId: c.drugId, drugName: c.name, qty: c.qty, unit: c.unit, price: c.price, subtotal: c.price * c.qty })),
-      total, paymentMethod: method, kasir: kasirName,
+      total,
+      paymentMethod: method,
+      kasir: 'Admin',
       doctorName: prescriptionSaved ? prescription.doctorName : undefined,
       patientName: prescriptionSaved ? prescription.patientName : undefined,
     });
 
-    printReceipt(cart, total, method, bayar, kasirName, prescriptionSaved ? prescription : undefined);
-    toast({ title: "Transaksi Berhasil", description: `${method} — ${formatRupiah(total)}` });
-    setCart([]); setNominalBayar(0);
-    setPrescription({ doctorName: "", patientName: "", note: "" }); setPrescriptionSaved(false);
+    printReceipt(cart, total, method, bayar, prescriptionSaved ? prescription : undefined);
+    toast({ title: "Transaksi Berhasil", description: `Pembayaran ${method} — ${formatRupiah(total)}` });
+    setCart([]);
+    setNominalBayar(0);
+    setPrescription({ doctorName: "", patientName: "", note: "" });
+    setPrescriptionSaved(false);
   };
 
   const saveEtiket = (id: string) => {
     setCart((prev) => prev.map((c) => c.drugId === id ? { ...c, aturanPakai: etiketValue } : c));
-    setEtiketItemId(null); setEtiketValue("");
+    setEtiketItemId(null);
+    setEtiketValue("");
     toast({ title: "Etiket Disimpan" });
   };
 
   return (
     <div className="p-6 animate-fade-in">
       <h1 className="text-2xl font-bold text-foreground mb-1">Transaksi / Kasir</h1>
-      <p className="text-sm text-muted-foreground mb-6">Kasir: <b>{kasirName}</b> — Cari obat berdasarkan nama, barcode, atau kegunaan.</p>
+      <p className="text-sm text-muted-foreground mb-6">Cari obat berdasarkan nama, barcode, atau kegunaan. Data langsung dari Inventaris.</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* LEFT: Product List */}
         <div className="lg:col-span-3 space-y-4">
           <div className="flex gap-2 flex-wrap">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder='Cari nama, barcode, atau kegunaan...' className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input
+                placeholder='Cari nama, barcode, atau kegunaan (misal: "gigi", "demam")...'
+                className="pl-10"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
+            {/* Resep */}
             <Dialog open={prescriptionOpen} onOpenChange={setPrescriptionOpen}>
               <DialogTrigger asChild>
-                <Button variant={prescriptionSaved ? "default" : "outline"} size="sm" className="gap-1.5"><FileText className="w-4 h-4" /> Resep {prescriptionSaved && "✓"}</Button>
+                <Button variant={prescriptionSaved ? "default" : "outline"} size="sm" className="gap-1.5">
+                  <FileText className="w-4 h-4" /> Resep {prescriptionSaved && "✓"}
+                </Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle>Input Resep Dokter</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle className="flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Input Resep Dokter</DialogTitle></DialogHeader>
                 <div className="space-y-4">
-                  <div className="space-y-1.5"><Label>Nama Dokter *</Label><Input value={prescription.doctorName} onChange={(e) => setPrescription({ ...prescription, doctorName: e.target.value })} /></div>
-                  <div className="space-y-1.5"><Label>Nama Pasien *</Label><Input value={prescription.patientName} onChange={(e) => setPrescription({ ...prescription, patientName: e.target.value })} /></div>
-                  <div className="space-y-1.5"><Label>Catatan</Label><Textarea value={prescription.note} onChange={(e) => setPrescription({ ...prescription, note: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label>Nama Dokter *</Label><Input placeholder="dr. Ahmad" value={prescription.doctorName} onChange={(e) => setPrescription({ ...prescription, doctorName: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label>Nama Pasien *</Label><Input placeholder="Budi Santoso" value={prescription.patientName} onChange={(e) => setPrescription({ ...prescription, patientName: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label>Catatan</Label><Textarea placeholder="Catatan resep dokter..." value={prescription.note} onChange={(e) => setPrescription({ ...prescription, note: e.target.value })} /></div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => { setPrescription({ doctorName: "", patientName: "", note: "" }); setPrescriptionSaved(false); setPrescriptionOpen(false); }}>Reset</Button>
                   <Button onClick={() => {
                     if (!prescription.doctorName || !prescription.patientName) { toast({ title: "Error", description: "Nama dokter dan pasien wajib.", variant: "destructive" }); return; }
                     setPrescriptionSaved(true); setPrescriptionOpen(false);
+                    toast({ title: "Resep Disimpan", description: `dr. ${prescription.doctorName} — ${prescription.patientName}` });
                   }}>Simpan Resep</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+
+            {/* Racikan */}
             <Dialog open={racikanOpen} onOpenChange={setRacikanOpen}>
-              <DialogTrigger asChild><Button variant="outline" size="sm" className="gap-1.5"><FlaskConical className="w-4 h-4" /> Racikan</Button></DialogTrigger>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5"><FlaskConical className="w-4 h-4" /> Racikan</Button>
+              </DialogTrigger>
               <DialogContent className="max-w-2xl">
-                <DialogHeader><DialogTitle>Kalkulator Racikan</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle className="flex items-center gap-2"><FlaskConical className="w-5 h-5 text-primary" /> Kalkulator Racikan</DialogTitle></DialogHeader>
                 <div className="space-y-4">
-                  <div className="space-y-1.5"><Label>Nama Racikan</Label><Input value={racikanName} onChange={(e) => setRacikanName(e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Nama Racikan</Label><Input placeholder="Racikan Batuk Pilek" value={racikanName} onChange={(e) => setRacikanName(e.target.value)} /></div>
                   <div className="rounded-lg border overflow-auto">
                     <Table>
                       <TableHeader><TableRow><TableHead>Obat</TableHead><TableHead className="w-20">Qty</TableHead><TableHead className="w-24">Satuan</TableHead><TableHead className="text-right w-28">Subtotal</TableHead><TableHead className="w-10"></TableHead></TableRow></TableHeader>
@@ -248,15 +300,19 @@ const Transactions = () => {
                                   <SelectContent>{drugs.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                                 </Select>
                               </TableCell>
-                              <TableCell><Input className="h-9" type="number" value={ri.qty} onChange={(e) => updateRacikanRow(idx, "qty", e.target.value)} /></TableCell>
+                              <TableCell><Input className="h-9" type="number" placeholder="0" value={ri.qty} onChange={(e) => updateRacikanRow(idx, "qty", e.target.value)} /></TableCell>
                               <TableCell>
                                 <Select value={ri.unit} onValueChange={(v) => updateRacikanRow(idx, "unit", v)}>
                                   <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
-                                  <SelectContent>{masterData.units.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}</SelectContent>
+                                  <SelectContent>
+                                    {masterData.units.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
+                                  </SelectContent>
                                 </Select>
                               </TableCell>
                               <TableCell className="text-right text-sm font-medium">{formatRupiah(sub)}</TableCell>
-                              <TableCell><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeRacikanRow(idx)} disabled={racikanItems.length === 1}><X className="w-3 h-3" /></Button></TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeRacikanRow(idx)} disabled={racikanItems.length === 1}><X className="w-3 h-3" /></Button>
+                              </TableCell>
                             </TableRow>
                           );
                         })}
@@ -265,7 +321,10 @@ const Transactions = () => {
                   </div>
                   <div className="flex items-center justify-between">
                     <Button variant="outline" size="sm" onClick={addRacikanRow}><Plus className="w-4 h-4 mr-1" /> Tambah Obat</Button>
-                    <div className="flex items-center gap-2"><Label className="text-sm whitespace-nowrap">Jasa Racik:</Label><Input className="h-9 w-28" type="number" value={jasaRacik} onChange={(e) => setJasaRacik(e.target.value)} /></div>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm whitespace-nowrap">Jasa Racik:</Label>
+                      <Input className="h-9 w-28" type="number" placeholder="5000" value={jasaRacik} onChange={(e) => setJasaRacik(e.target.value)} />
+                    </div>
                   </div>
                   <div className="border-t pt-3 flex justify-between items-center">
                     <span className="font-semibold text-foreground">Total Racikan</span>
@@ -296,11 +355,12 @@ const Transactions = () => {
             </p>
           )}
 
+          {/* Product cards */}
           <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
             {drugs.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">Belum ada produk. Tambahkan obat di menu Inventaris.</p>
+                <p className="text-sm">Belum ada produk. Tambahkan obat di menu Inventaris terlebih dahulu.</p>
               </div>
             ) : filtered.length === 0 ? (
               <p className="text-center py-8 text-muted-foreground text-sm">Tidak ditemukan obat dengan kata kunci "{search}"</p>
@@ -333,17 +393,20 @@ const Transactions = () => {
           </div>
         </div>
 
-        {/* Cart */}
+        {/* RIGHT: Cart */}
         <div className="lg:col-span-2">
           <Card className="glass-card sticky top-6">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4 text-primary" /> Keranjang
+                <ShoppingCart className="w-4 h-4 text-primary" />
+                Keranjang
                 {cart.length > 0 && <Badge className="bg-primary text-primary-foreground text-xs ml-auto">{cart.length}</Badge>}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {cart.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">Keranjang kosong.</p>}
+              {cart.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-8">Keranjang kosong. Klik obat untuk menambahkan.</p>
+              )}
               <div className="max-h-[40vh] overflow-y-auto space-y-2 pr-1">
                 {cart.map((item) => (
                   <div key={item.drugId} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
@@ -353,7 +416,10 @@ const Transactions = () => {
                       {item.aturanPakai && <p className="text-xs text-primary mt-0.5">📋 {item.aturanPakai}</p>}
                     </div>
                     <div className="flex items-center gap-1 ml-2">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEtiketItemId(item.drugId); setEtiketValue(item.aturanPakai || ""); }}><Sticker className="w-3 h-3" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" title="Atur etiket"
+                        onClick={() => { setEtiketItemId(item.drugId); setEtiketValue(item.aturanPakai || ""); }}>
+                        <Sticker className="w-3 h-3" />
+                      </Button>
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQty(item.drugId, -1)}><Minus className="w-3 h-3" /></Button>
                       <span className="text-sm font-semibold w-6 text-center">{item.qty}</span>
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQty(item.drugId, 1)}><Plus className="w-3 h-3" /></Button>
@@ -364,7 +430,7 @@ const Transactions = () => {
 
               {etiketItemId !== null && (
                 <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
-                  <Label className="text-xs font-semibold flex items-center gap-1"><Sticker className="w-3 h-3" /> Aturan Pakai</Label>
+                  <Label className="text-xs font-semibold flex items-center gap-1"><Sticker className="w-3 h-3" /> Aturan Pakai (Etiket)</Label>
                   <Select value={etiketValue} onValueChange={setEtiketValue}>
                     <SelectTrigger className="h-9"><SelectValue placeholder="Pilih aturan pakai" /></SelectTrigger>
                     <SelectContent>
@@ -410,7 +476,9 @@ const Transactions = () => {
                     <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => handlePay("Tunai")}><Banknote className="w-3 h-3" /> Tunai</Button>
                     <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => handlePay("Debit")}><CreditCard className="w-3 h-3" /> Debit</Button>
                     <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => handlePay("QRIS")}><QrCode className="w-3 h-3" /> QRIS</Button>
-                    <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => toast({ title: "Pending", description: "Transaksi disimpan sementara." })}><Pause className="w-3 h-3" /> Pending</Button>
+                    <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => {
+                      toast({ title: "Pending", description: "Transaksi disimpan sementara." });
+                    }}><Pause className="w-3 h-3" /> Pending</Button>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <Button className="w-full gap-2" onClick={() => handlePay("Tunai")}><Printer className="w-4 h-4" /> Bayar & Struk</Button>
