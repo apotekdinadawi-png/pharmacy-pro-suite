@@ -4,14 +4,16 @@ import type { User, Session } from '@supabase/supabase-js';
 
 export type AppRole = 'admin' | 'apoteker' | 'asisten_apoteker' | 'kasir';
 
+export type AccountStatus = 'pending' | 'approved' | 'rejected';
+
 export interface AuthState {
   user: User | null;
   session: Session | null;
-  profile: { full_name: string; username: string; phone: string; sipa: string } | null;
+  profile: { full_name: string; username: string; phone: string; sipa: string; status: AccountStatus } | null;
   role: AppRole | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, meta: { full_name: string; username: string }) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, meta: { full_name: string; username: string; role: string }) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -33,10 +35,10 @@ export const useAuth = (): AuthState => {
   const fetchProfileAndRole = useCallback(async (userId: string) => {
     try {
       const [profileRes, roleRes] = await Promise.all([
-        supabase.from('profiles').select('full_name, username, phone, sipa').eq('user_id', userId).single(),
+        supabase.from('profiles').select('full_name, username, phone, sipa, status').eq('user_id', userId).single(),
         supabase.from('user_roles').select('role').eq('user_id', userId).single(),
       ]);
-      if (profileRes.data) setProfile(profileRes.data);
+      if (profileRes.data) setProfile(profileRes.data as AuthState['profile']);
       if (roleRes.data) setRole(roleRes.data.role as AppRole);
       else setRole('kasir'); // default role
     } catch {
@@ -74,16 +76,28 @@ export const useAuth = (): AuthState => {
     return { error: error?.message ?? null };
   };
 
-  const signUp = async (email: string, password: string, meta: { full_name: string; username: string }) => {
-    const { error } = await supabase.auth.signUp({
+  const signUp = async (email: string, password: string, meta: { full_name: string; username: string; role: string }) => {
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: meta,
+        data: { full_name: meta.full_name, username: meta.username },
         emailRedirectTo: window.location.origin,
       },
     });
-    return { error: error?.message ?? null };
+    if (error) return { error: error.message };
+
+    // Assign the requested role
+    if (data.user) {
+      const roleMap: Record<string, AppRole> = {
+        'aping': 'asisten_apoteker',
+        'kasir': 'kasir',
+      };
+      const appRole = roleMap[meta.role] || 'kasir';
+      await supabase.from('user_roles').insert({ user_id: data.user.id, role: appRole });
+    }
+
+    return { error: null };
   };
 
   const signOut = async () => {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,9 +30,30 @@ const Login = () => {
     const { error: err } = await signIn(email, password);
     if (err) {
       setError("Email atau password salah. Silakan coba lagi.");
-    } else {
-      navigate("/dashboard");
+      setLoading(false);
+      return;
     }
+    // After sign in, check approval status
+    const { data: profileData } = await (await import('@/integrations/supabase/client')).supabase
+      .from('profiles')
+      .select('status')
+      .eq('user_id', (await (await import('@/integrations/supabase/client')).supabase.auth.getUser()).data.user?.id || '')
+      .single();
+
+    if (profileData?.status === 'pending') {
+      await (await import('@/integrations/supabase/client')).supabase.auth.signOut();
+      setError("Akun Anda masih menunggu persetujuan Admin. Silakan tunggu.");
+      setLoading(false);
+      return;
+    }
+    if (profileData?.status === 'rejected') {
+      await (await import('@/integrations/supabase/client')).supabase.auth.signOut();
+      setError("Akun Anda ditolak oleh Admin. Hubungi pengelola apotek.");
+      setLoading(false);
+      return;
+    }
+
+    navigate("/dashboard");
     setLoading(false);
   };
 
@@ -110,7 +131,8 @@ const Login = () => {
               </Button>
 
               <p className="text-xs text-center text-muted-foreground">
-                Hubungi Admin/APJ untuk mendapatkan akun akses.
+                Belum punya akun?{" "}
+                <Link to="/register" className="text-primary hover:underline font-medium">Daftar di sini</Link>
               </p>
             </form>
           </CardContent>

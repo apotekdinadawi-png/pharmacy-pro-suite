@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,108 +10,110 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import {
   UserPlus, Search, Shield, Edit2, Trash2, Clock, UserCheck, UserX,
-  LogIn, Package, ShoppingCart, AlertTriangle, FileText,
+  CheckCircle2, XCircle, Loader2,
 } from "lucide-react";
-import { useUserStore, type StaffUser, type UserRole, type UserStatus, type ActivityLog } from "@/stores/useUserStore";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+import type { AppRole } from "@/hooks/useAuth";
 
-const rolePermissions: Record<UserRole, string[]> = {
-  Apoteker: ["Akses semua fitur", "Validasi & input resep dokter", "Cetak SP Narkotika/Psikotropika", "Manajemen user & role", "Lihat laporan laba rugi", "Ubah harga jual & stok", "Void/hapus transaksi"],
-  "Asisten Apoteker": ["Transaksi kasir", "Input & racik resep (perlu validasi Apoteker)", "Update stok penerimaan", "Lihat laporan (kecuali laba rugi)", "Cetak SP reguler"],
-  Kasir: ["Transaksi kasir (OTC only)", "Cetak struk & etiket", "Lihat stok (read-only)", "Lihat riwayat transaksi sendiri"],
+interface UserProfile {
+  id: string;
+  user_id: string;
+  full_name: string;
+  username: string;
+  phone: string | null;
+  sipa: string | null;
+  status: string;
+  created_at: string;
+  role?: AppRole;
+  email?: string;
+}
+
+const roleLabels: Record<string, string> = {
+  admin: 'Admin',
+  apoteker: 'Apoteker',
+  asisten_apoteker: 'Asisten Apoteker / Aping',
+  kasir: 'Kasir',
 };
 
-const getCategoryIcon = (cat: ActivityLog["category"]) => {
-  switch (cat) {
-    case "auth": return <LogIn className="w-4 h-4" />;
-    case "transaksi": return <ShoppingCart className="w-4 h-4" />;
-    case "inventaris": return <Package className="w-4 h-4" />;
-    case "pengadaan": return <FileText className="w-4 h-4" />;
-    case "sistem": return <AlertTriangle className="w-4 h-4" />;
-  }
+const roleBadgeStyle: Record<string, string> = {
+  admin: 'bg-primary/10 text-primary border-primary/20',
+  apoteker: 'bg-primary/10 text-primary border-primary/20',
+  asisten_apoteker: 'bg-accent/20 text-accent-foreground border-accent/30',
+  kasir: 'bg-muted text-muted-foreground border-border',
 };
 
-const getCategoryColor = (cat: ActivityLog["category"]) => {
-  switch (cat) {
-    case "auth": return "bg-blue-500/10 text-blue-400 border-blue-500/20";
-    case "transaksi": return "bg-green-500/10 text-green-400 border-green-500/20";
-    case "inventaris": return "bg-orange-500/10 text-orange-400 border-orange-500/20";
-    case "pengadaan": return "bg-purple-500/10 text-purple-400 border-purple-500/20";
-    case "sistem": return "bg-red-500/10 text-red-400 border-red-500/20";
-  }
-};
-
-const getRoleBadge = (role: UserRole) => {
-  switch (role) {
-    case "Apoteker": return "bg-primary/10 text-primary border-primary/20";
-    case "Asisten Apoteker": return "bg-accent/20 text-accent-foreground border-accent/30";
-    case "Kasir": return "bg-muted text-muted-foreground border-border";
+const statusBadge = (status: string) => {
+  switch (status) {
+    case 'approved': return <Badge className="bg-success/10 text-success border-success/20"><UserCheck className="w-3 h-3 mr-1" />Aktif</Badge>;
+    case 'pending': return <Badge className="bg-warning/10 text-warning border-warning/20"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
+    case 'rejected': return <Badge className="bg-destructive/10 text-destructive border-destructive/20"><UserX className="w-3 h-3 mr-1" />Ditolak</Badge>;
+    default: return <Badge variant="outline">{status}</Badge>;
   }
 };
 
 const UserManagement = () => {
-  const { users, logs, addUser, updateUser, removeUser, toggleStatus } = useUserStore();
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [logSearch, setLogSearch] = useState("");
-  const [logCategoryFilter, setLogCategoryFilter] = useState<string>("all");
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editUser, setEditUser] = useState<StaffUser | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [roleInfoOpen, setRoleInfoOpen] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const [formName, setFormName] = useState("");
-  const [formUsername, setFormUsername] = useState("");
-  const [formRole, setFormRole] = useState<UserRole>("Kasir");
-  const [formSipa, setFormSipa] = useState("");
-  const [formPhone, setFormPhone] = useState("");
-  const [formStatus, setFormStatus] = useState<UserStatus>("Aktif");
-
-  const resetForm = () => { setFormName(""); setFormUsername(""); setFormRole("Kasir"); setFormSipa(""); setFormPhone(""); setFormStatus("Aktif"); setEditUser(null); };
-  const openAddDialog = () => { resetForm(); setDialogOpen(true); };
-  const openEditDialog = (u: StaffUser) => {
-    setEditUser(u); setFormName(u.name); setFormUsername(u.username); setFormRole(u.role);
-    setFormSipa(u.sipa || ""); setFormPhone(u.phone); setFormStatus(u.status); setDialogOpen(true);
+  const fetchUsers = async () => {
+    setLoading(true);
+    const { data: profiles } = await supabase.from('profiles').select('*');
+    const { data: roles } = await supabase.from('user_roles').select('user_id, role');
+    
+    const roleMap = new Map((roles || []).map(r => [r.user_id, r.role as AppRole]));
+    
+    const enriched: UserProfile[] = (profiles || []).map(p => ({
+      ...p,
+      role: roleMap.get(p.user_id) || 'kasir',
+    }));
+    
+    setUsers(enriched);
+    setLoading(false);
   };
 
-  const handleSave = () => {
-    if (!formName || !formUsername) return;
-    if (editUser) {
-      updateUser(editUser.id, {
-        name: formName, username: formUsername, role: formRole,
-        sipa: formRole === "Apoteker" ? formSipa : undefined,
-        phone: formPhone, status: formStatus,
-      });
-    } else {
-      addUser({
-        name: formName, username: formUsername, role: formRole,
-        sipa: formRole === "Apoteker" ? formSipa : undefined,
-        phone: formPhone, status: formStatus,
-        lastLogin: "-", createdAt: new Date().toISOString().slice(0, 10),
-      });
+  useEffect(() => { fetchUsers(); }, []);
+
+  const handleApprove = async (userId: string) => {
+    const { error } = await supabase.from('profiles').update({ status: 'approved' }).eq('user_id', userId);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Disetujui", description: "User telah disetujui dan bisa login." });
+    fetchUsers();
+  };
+
+  const handleReject = async (userId: string) => {
+    const { error } = await supabase.from('profiles').update({ status: 'rejected' }).eq('user_id', userId);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Ditolak", description: "Pendaftaran user ditolak." });
+    fetchUsers();
+  };
+
+  const handleChangeRole = async (userId: string, newRole: AppRole) => {
+    const { error } = await supabase.from('user_roles').update({ role: newRole }).eq('user_id', userId);
+    if (error) {
+      // If no row exists, insert
+      await supabase.from('user_roles').insert({ user_id: userId, role: newRole });
     }
-    setDialogOpen(false); resetForm();
+    toast({ title: "Role Diperbarui" });
+    fetchUsers();
   };
 
-  const handleDelete = (id: string) => { removeUser(id); setDeleteConfirm(null); };
-
-  const filtered = users.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.username.toLowerCase().includes(search.toLowerCase()) ||
-    u.role.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const filteredLogs = logs.filter(l => {
-    const matchSearch = l.userName.toLowerCase().includes(logSearch.toLowerCase()) ||
-      l.action.toLowerCase().includes(logSearch.toLowerCase()) ||
-      l.detail.toLowerCase().includes(logSearch.toLowerCase());
-    const matchCat = logCategoryFilter === "all" || l.category === logCategoryFilter;
-    return matchSearch && matchCat;
+  const pendingUsers = users.filter(u => u.status === 'pending');
+  const filtered = users.filter(u => {
+    const matchSearch = u.full_name.toLowerCase().includes(search.toLowerCase()) ||
+      u.username.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === 'all' || u.status === statusFilter;
+    return matchSearch && matchStatus;
   });
 
   const stats = {
     total: users.length,
-    aktif: users.filter(u => u.status === "Aktif").length,
-    apoteker: users.filter(u => u.role === "Apoteker").length,
-    kasir: users.filter(u => u.role === "Kasir").length,
+    aktif: users.filter(u => u.status === 'approved').length,
+    pending: pendingUsers.length,
+    ditolak: users.filter(u => u.status === 'rejected').length,
   };
 
   return (
@@ -119,20 +121,17 @@ const UserManagement = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Manajemen User</h1>
-          <p className="text-sm text-muted-foreground">Kelola pengguna, role akses, dan pantau aktivitas sistem. Data tersimpan permanen.</p>
+          <p className="text-sm text-muted-foreground">Kelola pendaftaran user, approve/reject, dan ubah role akses.</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setRoleInfoOpen(true)}><Shield className="w-4 h-4 mr-2" /> Hak Akses</Button>
-          <Button onClick={openAddDialog}><UserPlus className="w-4 h-4 mr-2" /> Tambah User</Button>
-        </div>
+        <Button variant="outline" onClick={() => setRoleInfoOpen(true)}><Shield className="w-4 h-4 mr-2" /> Hak Akses</Button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total User", value: stats.total, icon: "👥" },
           { label: "User Aktif", value: stats.aktif, icon: "✅" },
-          { label: "Apoteker", value: stats.apoteker, icon: "💊" },
-          { label: "Kasir", value: stats.kasir, icon: "🧾" },
+          { label: "Pending", value: stats.pending, icon: "⏳" },
+          { label: "Ditolak", value: stats.ditolak, icon: "❌" },
         ].map(s => (
           <Card key={s.label} className="glass-card">
             <CardContent className="p-4 flex items-center gap-3">
@@ -146,25 +145,69 @@ const UserManagement = () => {
         ))}
       </div>
 
+      {pendingUsers.length > 0 && (
+        <Card className="glass-card border-warning/30 bg-warning/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2 text-warning">
+              <Clock className="w-4 h-4" /> Menunggu Persetujuan ({pendingUsers.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {pendingUsers.map(u => (
+                <div key={u.id} className="flex items-center justify-between p-3 rounded-lg bg-background border border-border">
+                  <div>
+                    <p className="font-medium text-foreground">{u.full_name}</p>
+                    <p className="text-xs text-muted-foreground">@{u.username} — {roleLabels[u.role || 'kasir']}</p>
+                    <p className="text-xs text-muted-foreground">Daftar: {new Date(u.created_at).toLocaleDateString('id-ID')}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" className="gap-1 bg-success hover:bg-success/90 text-success-foreground" onClick={() => handleApprove(u.user_id)}>
+                      <CheckCircle2 className="w-4 h-4" /> Approve
+                    </Button>
+                    <Button size="sm" variant="destructive" className="gap-1" onClick={() => handleReject(u.user_id)}>
+                      <XCircle className="w-4 h-4" /> Reject
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs defaultValue="users" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="users">Daftar User</TabsTrigger>
-          <TabsTrigger value="logs">Log Aktivitas</TabsTrigger>
+          <TabsTrigger value="users">Semua User</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="space-y-4">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Cari nama, username, atau role..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+              <Input placeholder="Cari nama atau username..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
             </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Semua Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Status</SelectItem>
+                <SelectItem value="approved">Aktif</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="rejected">Ditolak</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <Card className="glass-card">
-            {users.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin opacity-50" />
+                <p className="text-sm">Memuat data user...</p>
+              </div>
+            ) : users.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <UserPlus className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">Belum ada user. Klik "Tambah User" untuk menambahkan.</p>
+                <p className="text-sm">Belum ada user terdaftar.</p>
               </div>
             ) : (
               <Table>
@@ -173,105 +216,59 @@ const UserManagement = () => {
                     <TableHead>Nama</TableHead>
                     <TableHead>Username</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead>No. SIPA</TableHead>
+                    <TableHead>SIPA</TableHead>
                     <TableHead>Telepon</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Terdaftar</TableHead>
                     <TableHead className="text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.map(u => (
                     <TableRow key={u.id}>
-                      <TableCell className="font-medium text-foreground">{u.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{u.username}</TableCell>
-                      <TableCell><Badge className={getRoleBadge(u.role)}>{u.role}</Badge></TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{u.sipa || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{u.phone}</TableCell>
+                      <TableCell className="font-medium text-foreground">{u.full_name || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">@{u.username || '—'}</TableCell>
                       <TableCell>
-                        <Badge variant={u.status === "Aktif" ? "default" : "destructive"} className="cursor-pointer" onClick={() => toggleStatus(u.id)}>
-                          {u.status === "Aktif" ? <UserCheck className="w-3 h-3 mr-1" /> : <UserX className="w-3 h-3 mr-1" />}
-                          {u.status}
-                        </Badge>
+                        <Select value={u.role || 'kasir'} onValueChange={(v) => handleChangeRole(u.user_id, v as AppRole)}>
+                          <SelectTrigger className="h-8 w-44">
+                            <Badge className={roleBadgeStyle[u.role || 'kasir']}>{roleLabels[u.role || 'kasir']}</Badge>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="apoteker">Apoteker</SelectItem>
+                            <SelectItem value="asisten_apoteker">Asisten Apoteker</SelectItem>
+                            <SelectItem value="kasir">Kasir</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{u.sipa || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">{u.phone || '—'}</TableCell>
+                      <TableCell>{statusBadge(u.status)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{new Date(u.created_at).toLocaleDateString('id-ID')}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button size="icon" variant="ghost" onClick={() => openEditDialog(u)}><Edit2 className="w-4 h-4" /></Button>
-                          {deleteConfirm === u.id ? (
-                            <div className="flex gap-1">
-                              <Button size="sm" variant="destructive" onClick={() => handleDelete(u.id)}>Ya</Button>
-                              <Button size="sm" variant="outline" onClick={() => setDeleteConfirm(null)}>Batal</Button>
-                            </div>
-                          ) : (
-                            <Button size="icon" variant="ghost" className="text-destructive" onClick={() => setDeleteConfirm(u.id)}><Trash2 className="w-4 h-4" /></Button>
+                          {u.status === 'pending' && (
+                            <>
+                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleApprove(u.user_id)}>
+                                <CheckCircle2 className="w-3 h-3" /> Acc
+                              </Button>
+                              <Button size="sm" variant="destructive" className="h-7 text-xs gap-1" onClick={() => handleReject(u.user_id)}>
+                                <XCircle className="w-3 h-3" />
+                              </Button>
+                            </>
+                          )}
+                          {u.status === 'rejected' && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleApprove(u.user_id)}>
+                              <CheckCircle2 className="w-3 h-3" /> Aktifkan
+                            </Button>
                           )}
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filtered.length === 0 && users.length > 0 && (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Tidak ada user ditemukan.</TableCell></TableRow>
+                  {filtered.length === 0 && (
+                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Tidak ada user ditemukan.</TableCell></TableRow>
                   )}
-                </TableBody>
-              </Table>
-            )}
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="logs" className="space-y-4">
-          <div className="flex gap-2 flex-wrap">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Cari aktivitas..." value={logSearch} onChange={e => setLogSearch(e.target.value)} className="pl-9" />
-            </div>
-            <Select value={logCategoryFilter} onValueChange={setLogCategoryFilter}>
-              <SelectTrigger className="w-44"><SelectValue placeholder="Semua Kategori" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua Kategori</SelectItem>
-                <SelectItem value="auth">Autentikasi</SelectItem>
-                <SelectItem value="transaksi">Transaksi</SelectItem>
-                <SelectItem value="inventaris">Inventaris</SelectItem>
-                <SelectItem value="pengadaan">Pengadaan</SelectItem>
-                <SelectItem value="sistem">Sistem</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Card className="glass-card">
-            {logs.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Clock className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">Belum ada log aktivitas.</p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[180px]">Waktu</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Kategori</TableHead>
-                    <TableHead>Aksi</TableHead>
-                    <TableHead>Detail</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredLogs.map(l => (
-                    <TableRow key={l.id}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1.5"><Clock className="w-3 h-3" /> {l.timestamp}</div>
-                      </TableCell>
-                      <TableCell className="font-medium text-foreground">{l.userName}</TableCell>
-                      <TableCell><Badge className={getRoleBadge(l.userRole)} variant="outline">{l.userRole}</Badge></TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={getCategoryColor(l.category)}>
-                          <span className="mr-1">{getCategoryIcon(l.category)}</span>
-                          {l.category}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">{l.action}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{l.detail}</TableCell>
-                    </TableRow>
-                  ))}
                 </TableBody>
               </Table>
             )}
@@ -279,56 +276,21 @@ const UserManagement = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Add/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{editUser ? "Edit User" : "Tambah User Baru"}</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5 col-span-2"><Label>Nama Lengkap *</Label><Input value={formName} onChange={e => setFormName(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Username *</Label><Input value={formUsername} onChange={e => setFormUsername(e.target.value)} /></div>
-            <div className="space-y-1.5">
-              <Label>Role</Label>
-              <Select value={formRole} onValueChange={(v) => setFormRole(v as UserRole)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Apoteker">Apoteker</SelectItem>
-                  <SelectItem value="Asisten Apoteker">Asisten Apoteker</SelectItem>
-                  <SelectItem value="Kasir">Kasir</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {formRole === "Apoteker" && (
-              <div className="space-y-1.5 col-span-2"><Label>No. SIPA</Label><Input value={formSipa} onChange={e => setFormSipa(e.target.value)} /></div>
-            )}
-            <div className="space-y-1.5"><Label>No. Telepon</Label><Input value={formPhone} onChange={e => setFormPhone(e.target.value)} /></div>
-            <div className="space-y-1.5">
-              <Label>Status</Label>
-              <Select value={formStatus} onValueChange={(v) => setFormStatus(v as UserStatus)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Aktif">Aktif</SelectItem>
-                  <SelectItem value="Nonaktif">Nonaktif</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Batal</Button>
-            <Button onClick={handleSave}>Simpan</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Role Info Dialog */}
       <Dialog open={roleInfoOpen} onOpenChange={setRoleInfoOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Shield className="w-5 h-5 text-primary" /> Hak Akses per Role</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            {(Object.entries(rolePermissions) as [UserRole, string[]][]).map(([role, perms]) => (
-              <Card key={role}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm"><Badge className={getRoleBadge(role)}>{role}</Badge></CardTitle></CardHeader>
+            {[
+              { role: 'Admin', perms: ['Akses penuh semua menu', 'Approve/reject pendaftaran user', 'Ubah role user lain'] },
+              { role: 'Apoteker', perms: ['Akses semua fitur', 'Validasi resep dokter', 'Cetak SP Narkotika/Psikotropika', 'Manajemen user'] },
+              { role: 'Asisten Apoteker (Aping)', perms: ['Dashboard', 'Inventaris', 'Pengadaan', 'Laporan stok'] },
+              { role: 'Kasir', perms: ['Dashboard', 'Transaksi kasir (POS)', 'Pelanggan', 'Cetak struk & etiket'] },
+            ].map(r => (
+              <Card key={r.role}>
+                <CardHeader className="pb-2"><CardTitle className="text-sm"><Badge variant="outline">{r.role}</Badge></CardTitle></CardHeader>
                 <CardContent>
-                  <ul className="space-y-1">{perms.map(p => <li key={p} className="text-xs text-muted-foreground flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />{p}</li>)}</ul>
+                  <ul className="space-y-1">{r.perms.map(p => <li key={p} className="text-xs text-muted-foreground flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />{p}</li>)}</ul>
                 </CardContent>
               </Card>
             ))}
