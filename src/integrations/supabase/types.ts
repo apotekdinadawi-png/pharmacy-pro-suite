@@ -22,6 +22,7 @@ export type Database = {
           id: string
           phone: string | null
           sipa: string | null
+          status: string
           updated_at: string
           user_id: string
           username: string
@@ -33,6 +34,7 @@ export type Database = {
           id?: string
           phone?: string | null
           sipa?: string | null
+          status?: string
           updated_at?: string
           user_id: string
           username?: string
@@ -44,6 +46,7 @@ export type Database = {
           id?: string
           phone?: string | null
           sipa?: string | null
+          status?: string
           updated_at?: string
           user_id?: string
           username?: string
