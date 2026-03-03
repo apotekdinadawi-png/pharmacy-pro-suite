@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { User, Session } from '@supabase/supabase-js';
 
-export type AppRole = 'admin' | 'apoteker' | 'asisten_apoteker' | 'kasir';
+export type AppRole = 'admin' | 'apj' | 'aping' | 'kasir';
 
 export type AccountStatus = 'pending' | 'approved' | 'rejected';
 
@@ -20,8 +20,8 @@ export interface AuthState {
 // Role-based menu access map
 export const roleMenuAccess: Record<AppRole, string[]> = {
   admin: ['dashboard', 'transactions', 'inventory', 'procurement', 'reports', 'customers', 'users', 'settings'],
-  apoteker: ['dashboard', 'transactions', 'inventory', 'procurement', 'reports', 'customers', 'users', 'settings'],
-  asisten_apoteker: ['dashboard', 'inventory', 'procurement', 'reports'],
+  apj: ['dashboard', 'transactions', 'inventory', 'procurement', 'reports', 'customers', 'settings'],
+  aping: ['dashboard', 'inventory', 'procurement', 'reports'],
   kasir: ['dashboard', 'transactions', 'customers'],
 };
 
@@ -40,7 +40,7 @@ export const useAuth = (): AuthState => {
       ]);
       if (profileRes.data) setProfile(profileRes.data as AuthState['profile']);
       if (roleRes.data) setRole(roleRes.data.role as AppRole);
-      else setRole('kasir'); // default role
+      else setRole('kasir');
     } catch {
       setRole('kasir');
     }
@@ -77,6 +77,11 @@ export const useAuth = (): AuthState => {
   };
 
   const signUp = async (email: string, password: string, meta: { full_name: string; username: string; role: string }) => {
+    // Block admin registration
+    if (email.toLowerCase() === 'apotekdinadawi@gmail.com') {
+      return { error: 'Email ini tidak dapat digunakan untuk pendaftaran.' };
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -87,14 +92,14 @@ export const useAuth = (): AuthState => {
     });
     if (error) return { error: error.message };
 
-    // Assign the requested role
     if (data.user) {
       const roleMap: Record<string, AppRole> = {
-        'aping': 'asisten_apoteker',
+        'apj': 'apj',
+        'aping': 'aping',
         'kasir': 'kasir',
       };
       const appRole = roleMap[meta.role] || 'kasir';
-      await supabase.from('user_roles').insert({ user_id: data.user.id, role: appRole });
+      await supabase.from('user_roles').insert([{ user_id: data.user.id, role: appRole }]);
     }
 
     return { error: null };
