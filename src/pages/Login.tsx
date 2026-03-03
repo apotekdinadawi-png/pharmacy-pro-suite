@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Eye, EyeOff, Pill, AlertCircle } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -16,7 +17,6 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Redirect if already logged in
   if (user) {
     navigate("/dashboard", { replace: true });
     return null;
@@ -33,21 +33,28 @@ const Login = () => {
       setLoading(false);
       return;
     }
-    // After sign in, check approval status
-    const { data: profileData } = await (await import('@/integrations/supabase/client')).supabase
+
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) {
+      setError("Gagal mendapatkan data user.");
+      setLoading(false);
+      return;
+    }
+
+    const { data: profileData } = await supabase
       .from('profiles')
       .select('status')
-      .eq('user_id', (await (await import('@/integrations/supabase/client')).supabase.auth.getUser()).data.user?.id || '')
+      .eq('user_id', userData.user.id)
       .single();
 
     if (profileData?.status === 'pending') {
-      await (await import('@/integrations/supabase/client')).supabase.auth.signOut();
-      setError("Akun Anda masih menunggu persetujuan Admin. Silakan tunggu.");
+      await supabase.auth.signOut();
+      setError("Akun Anda sedang menunggu persetujuan Admin. Silakan tunggu.");
       setLoading(false);
       return;
     }
     if (profileData?.status === 'rejected') {
-      await (await import('@/integrations/supabase/client')).supabase.auth.signOut();
+      await supabase.auth.signOut();
       setError("Akun Anda ditolak oleh Admin. Hubungi pengelola apotek.");
       setLoading(false);
       return;
@@ -85,35 +92,14 @@ const Login = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Masukkan email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoFocus
-                />
+                <Input id="email" type="email" placeholder="Masukkan email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Masukkan password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    tabIndex={-1}
-                  >
+                  <Input id="password" type={showPassword ? "text" : "password"} placeholder="Masukkan password" value={password} onChange={(e) => setPassword(e.target.value)} required className="pr-10" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors" tabIndex={-1}>
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>

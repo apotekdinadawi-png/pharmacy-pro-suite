@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Eye, EyeOff, Pill, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -20,6 +21,29 @@ const Register = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [apjTaken, setApjTaken] = useState(false);
+
+  useEffect(() => {
+    // Check if APJ role is already taken (approved or pending)
+    const checkApj = async () => {
+      const { data } = await supabase
+        .from('user_roles')
+        .select('user_id, role')
+        .eq('role', 'apj');
+      
+      if (data && data.length > 0) {
+        // Check if any of these users are approved or pending
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('user_id, status')
+          .in('user_id', data.map(r => r.user_id))
+          .in('status', ['approved', 'pending']);
+        
+        setApjTaken((profiles?.length || 0) > 0);
+      }
+    };
+    checkApj();
+  }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +55,10 @@ const Register = () => {
     }
     if (!email.includes("@")) {
       setError("Format email tidak valid.");
+      return;
+    }
+    if (email.toLowerCase() === 'apotekdinadawi@gmail.com') {
+      setError("Email ini tidak dapat digunakan untuk pendaftaran.");
       return;
     }
     if (password.length < 6) {
@@ -87,7 +115,7 @@ const Register = () => {
             <Pill className="w-10 h-10 text-primary-foreground" />
           </div>
           <h1 className="text-3xl font-bold text-foreground">Daftar Akun</h1>
-          <p className="text-muted-foreground mt-1">Registrasi sebagai Aping atau Kasir</p>
+          <p className="text-muted-foreground mt-1">Registrasi sebagai APJ, Aping, atau Kasir</p>
         </div>
 
         <Card className="glass-card border-border/50">
@@ -143,10 +171,16 @@ const Register = () => {
                 <Select value={role} onValueChange={setRole}>
                   <SelectTrigger><SelectValue placeholder="Pilih role Anda" /></SelectTrigger>
                   <SelectContent>
+                    {!apjTaken && (
+                      <SelectItem value="apj">Apoteker Penanggung Jawab (APJ)</SelectItem>
+                    )}
                     <SelectItem value="aping">Apoteker Pendamping (Aping)</SelectItem>
                     <SelectItem value="kasir">Kasir</SelectItem>
                   </SelectContent>
                 </Select>
+                {apjTaken && (
+                  <p className="text-xs text-muted-foreground">Posisi APJ sudah terisi. Hubungi Admin jika ada pertanyaan.</p>
+                )}
               </div>
 
               <Button type="submit" className="w-full gradient-primary text-primary-foreground font-semibold h-11" disabled={loading}>
