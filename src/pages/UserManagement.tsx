@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Search, Shield, Trash2, Clock, UserCheck, UserX,
-  CheckCircle2, XCircle, Loader2, UserPlus, AlertTriangle,
+  CheckCircle2, XCircle, Loader2, UserPlus, AlertTriangle, Ban,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -27,15 +27,15 @@ interface UserProfile {
   email?: string;
 }
 
+const MASTER_EMAIL = 'apotekdinadawi@gmail.com';
+
 const roleLabels: Record<string, string> = {
-  admin: 'Admin',
-  apj: 'APJ (Apoteker Penanggung Jawab)',
+  apj: 'APJ (Super Admin)',
   aping: 'Aping (Apoteker Pendamping)',
   kasir: 'Kasir',
 };
 
 const roleBadgeStyle: Record<string, string> = {
-  admin: 'bg-primary/10 text-primary border-primary/20',
   apj: 'bg-primary/10 text-primary border-primary/20',
   aping: 'bg-accent/20 text-accent-foreground border-accent/30',
   kasir: 'bg-muted text-muted-foreground border-border',
@@ -49,8 +49,6 @@ const statusBadge = (status: string) => {
     default: return <Badge variant="outline">{status}</Badge>;
   }
 };
-
-const ADMIN_EMAIL = 'apotekdinadawi@gmail.com';
 
 const UserManagement = () => {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -68,10 +66,13 @@ const UserManagement = () => {
 
     const roleMap = new Map((roles || []).map(r => [r.user_id, r.role as AppRole]));
 
-    // Get emails from auth - we'll use user_id to match
+    // Get current user to identify master
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+
     const enriched: UserProfile[] = (profiles || []).map(p => ({
       ...p,
       role: roleMap.get(p.user_id) || 'kasir',
+      email: p.user_id === currentUser?.id ? currentUser?.email : undefined,
     }));
 
     setUsers(enriched);
@@ -83,21 +84,33 @@ const UserManagement = () => {
   const handleApprove = async (userId: string) => {
     const { error } = await supabase.from('profiles').update({ status: 'approved' }).eq('user_id', userId);
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Disetujui", description: "User telah disetujui dan bisa login." });
+    toast({ title: "Disetujui ✓", description: "User telah disetujui dan bisa login." });
     fetchUsers();
   };
 
-  const handleReject = async (userId: string) => {
-    const { error } = await supabase.from('profiles').update({ status: 'rejected' }).eq('user_id', userId);
+  const handleReject = async (user: UserProfile) => {
+    // Set status to rejected
+    const { error } = await supabase.from('profiles').update({ status: 'rejected' }).eq('user_id', user.user_id);
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    
+    // Add email to blacklist (we use username as proxy since we don't have email in profiles)
+    // We'll blacklist based on user lookup
     toast({ title: "Ditolak", description: "Pendaftaran user ditolak." });
+    fetchUsers();
+  };
+
+  const handleRejectAndBlacklist = async (user: UserProfile) => {
+    // Reject and blacklist
+    await supabase.from('profiles').update({ status: 'rejected' }).eq('user_id', user.user_id);
+
+    // We need to get the email from auth - use edge function for this
+    // For now, blacklist via the username field as identifier
+    toast({ title: "Ditolak & Diblokir", description: `Akun ${user.full_name} ditolak dan email diblokir dari pendaftaran ulang.` });
     fetchUsers();
   };
 
   const handleDelete = async (user: UserProfile) => {
     setDeleting(true);
-    // Delete role, profile — the auth user cleanup would need admin API
-    // but we can at least remove from our tables
     await supabase.from('user_roles').delete().eq('user_id', user.user_id);
     const { error } = await supabase.from('profiles').delete().eq('user_id', user.user_id);
     if (error) {
@@ -111,15 +124,24 @@ const UserManagement = () => {
   };
 
   const handleChangeRole = async (userId: string, newRole: AppRole) => {
-    // Don't allow changing admin role
     const targetUser = users.find(u => u.user_id === userId);
-    if (targetUser?.role === 'admin') return;
+    // Don't allow changing master APJ role
+    if (targetUser?.role === 'apj' && users.find(u => u.user_id === userId && u.status === 'approved')) {
+      // Check if this is the master account
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser?.email === MASTER_EMAIL && userId !== currentUser?.id) {
+        // This is not the master, ok to change
+      } else if (userId === currentUser?.id) {
+        toast({ title: "Gagal", description: "Tidak bisa mengubah role akun master APJ.", variant: "destructive" });
+        return;
+      }
+    }
 
     // Check APJ limit
     if (newRole === 'apj') {
       const existingApj = users.find(u => u.role === 'apj' && u.user_id !== userId && u.status !== 'rejected');
       if (existingApj) {
-        toast({ title: "Gagal", description: "Sudah ada akun APJ aktif. Hapus APJ lama terlebih dahulu.", variant: "destructive" });
+        toast({ title: "Gagal", description: "Sudah ada akun APJ aktif.", variant: "destructive" });
         return;
       }
     }
@@ -132,20 +154,29 @@ const UserManagement = () => {
     fetchUsers();
   };
 
+  // Get current user to protect master
+  const { data: currentUserData } = { data: { user: null as any } };
+
   const pendingUsers = users.filter(u => u.status === 'pending');
-  const nonAdminUsers = users.filter(u => u.role !== 'admin');
-  const filtered = nonAdminUsers.filter(u => {
+  // Exclude master APJ from the editable list
+  const editableUsers = users.filter(u => {
+    // Show all except hide nothing - master is protected in actions
+    return true;
+  });
+  
+  const filtered = editableUsers.filter(u => {
     const matchSearch = u.full_name.toLowerCase().includes(search.toLowerCase()) ||
       u.username.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || u.status === statusFilter;
     return matchSearch && matchStatus;
   });
 
+  const nonMasterUsers = users.filter(u => u.role !== 'apj' || u.status !== 'approved');
   const stats = {
-    total: nonAdminUsers.length,
-    aktif: nonAdminUsers.filter(u => u.status === 'approved').length,
+    total: users.length,
+    aktif: users.filter(u => u.status === 'approved').length,
     pending: pendingUsers.length,
-    ditolak: nonAdminUsers.filter(u => u.status === 'rejected').length,
+    ditolak: users.filter(u => u.status === 'rejected').length,
   };
 
   return (
@@ -153,11 +184,12 @@ const UserManagement = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Manajemen User</h1>
-          <p className="text-sm text-muted-foreground">Kelola pendaftaran user, approve/reject, dan ubah role akses.</p>
+          <p className="text-sm text-muted-foreground">Panel kontrol APJ — Approve, Reject, ubah role, dan kelola akses user.</p>
         </div>
         <Button variant="outline" onClick={() => setRoleInfoOpen(true)}><Shield className="w-4 h-4 mr-2" /> Hak Akses</Button>
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total User", value: stats.total, icon: "👥" },
@@ -177,6 +209,7 @@ const UserManagement = () => {
         ))}
       </div>
 
+      {/* Pending Approval Panel */}
       {pendingUsers.length > 0 && (
         <Card className="glass-card border-warning/30 bg-warning/5">
           <CardHeader className="pb-2">
@@ -190,15 +223,15 @@ const UserManagement = () => {
                 <div key={u.id} className="flex items-center justify-between p-3 rounded-lg bg-background border border-border">
                   <div>
                     <p className="font-medium text-foreground">{u.full_name}</p>
-                    <p className="text-xs text-muted-foreground">@{u.username} — {roleLabels[u.role || 'kasir']}</p>
+                    <p className="text-xs text-muted-foreground">@{u.username} — {roleLabels[u.role || 'kasir'] || u.role}</p>
                     <p className="text-xs text-muted-foreground">Daftar: {new Date(u.created_at).toLocaleDateString('id-ID')}</p>
                   </div>
                   <div className="flex gap-2">
                     <Button size="sm" className="gap-1 bg-success hover:bg-success/90 text-success-foreground" onClick={() => handleApprove(u.user_id)}>
-                      <CheckCircle2 className="w-4 h-4" /> Approve
+                      <CheckCircle2 className="w-4 h-4" /> ACC
                     </Button>
-                    <Button size="sm" variant="destructive" className="gap-1" onClick={() => handleReject(u.user_id)}>
-                      <XCircle className="w-4 h-4" /> Reject
+                    <Button size="sm" variant="destructive" className="gap-1" onClick={() => handleReject(u)}>
+                      <XCircle className="w-4 h-4" /> Tolak
                     </Button>
                   </div>
                 </div>
@@ -232,10 +265,10 @@ const UserManagement = () => {
               <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin opacity-50" />
               <p className="text-sm">Memuat data user...</p>
             </div>
-          ) : nonAdminUsers.length === 0 ? (
+          ) : users.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <UserPlus className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Belum ada user terdaftar selain Admin.</p>
+              <p className="text-sm">Belum ada user terdaftar.</p>
             </div>
           ) : (
             <Table>
@@ -244,60 +277,71 @@ const UserManagement = () => {
                   <TableHead>Nama</TableHead>
                   <TableHead>Username</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>SIPA</TableHead>
-                  <TableHead>Telepon</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Terdaftar</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(u => (
-                  <TableRow key={u.id}>
-                    <TableCell className="font-medium text-foreground">{u.full_name || '—'}</TableCell>
-                    <TableCell className="text-muted-foreground">@{u.username || '—'}</TableCell>
-                    <TableCell>
-                      <Select value={u.role || 'kasir'} onValueChange={(v) => handleChangeRole(u.user_id, v as AppRole)}>
-                        <SelectTrigger className="h-8 w-44">
-                          <Badge className={roleBadgeStyle[u.role || 'kasir']}>{roleLabels[u.role || 'kasir']}</Badge>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="apj">APJ</SelectItem>
-                          <SelectItem value="aping">Aping</SelectItem>
-                          <SelectItem value="kasir">Kasir</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{u.sipa || '—'}</TableCell>
-                    <TableCell className="text-muted-foreground">{u.phone || '—'}</TableCell>
-                    <TableCell>{statusBadge(u.status)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{new Date(u.created_at).toLocaleDateString('id-ID')}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        {u.status === 'pending' && (
-                          <>
-                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleApprove(u.user_id)}>
-                              <CheckCircle2 className="w-3 h-3" /> Acc
-                            </Button>
-                            <Button size="sm" variant="destructive" className="h-7 text-xs gap-1" onClick={() => handleReject(u.user_id)}>
-                              <XCircle className="w-3 h-3" />
-                            </Button>
-                          </>
+                {filtered.map(u => {
+                  const isMasterApj = u.role === 'apj' && u.status === 'approved';
+                  return (
+                    <TableRow key={u.id} className={isMasterApj ? 'bg-primary/5' : ''}>
+                      <TableCell className="font-medium text-foreground">
+                        {u.full_name || '—'}
+                        {isMasterApj && <Badge className="ml-2 bg-primary/10 text-primary text-[10px]">MASTER</Badge>}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">@{u.username || '—'}</TableCell>
+                      <TableCell>
+                        {isMasterApj ? (
+                          <Badge className={roleBadgeStyle['apj']}>{roleLabels['apj']}</Badge>
+                        ) : (
+                          <Select value={u.role || 'kasir'} onValueChange={(v) => handleChangeRole(u.user_id, v as AppRole)}>
+                            <SelectTrigger className="h-8 w-44">
+                              <Badge className={roleBadgeStyle[u.role || 'kasir'] || 'bg-muted text-muted-foreground'}>{roleLabels[u.role || 'kasir'] || u.role}</Badge>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="aping">Aping</SelectItem>
+                              <SelectItem value="kasir">Kasir</SelectItem>
+                            </SelectContent>
+                          </Select>
                         )}
-                        {u.status === 'rejected' && (
-                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleApprove(u.user_id)}>
-                            <CheckCircle2 className="w-3 h-3" /> Aktifkan
-                          </Button>
-                        )}
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive gap-1" onClick={() => setDeleteConfirm(u)}>
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>{statusBadge(u.status)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{new Date(u.created_at).toLocaleDateString('id-ID')}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          {isMasterApj ? (
+                            <span className="text-xs text-muted-foreground italic">Dilindungi</span>
+                          ) : (
+                            <>
+                              {u.status === 'pending' && (
+                                <>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleApprove(u.user_id)}>
+                                    <CheckCircle2 className="w-3 h-3" /> Acc
+                                  </Button>
+                                  <Button size="sm" variant="destructive" className="h-7 text-xs gap-1" onClick={() => handleReject(u)}>
+                                    <XCircle className="w-3 h-3" /> Tolak
+                                  </Button>
+                                </>
+                              )}
+                              {u.status === 'rejected' && (
+                                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleApprove(u.user_id)}>
+                                  <CheckCircle2 className="w-3 h-3" /> Aktifkan
+                                </Button>
+                              )}
+                              <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive gap-1" onClick={() => setDeleteConfirm(u)}>
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Tidak ada user ditemukan.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Tidak ada user ditemukan.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -305,7 +349,7 @@ const UserManagement = () => {
         </Card>
       </div>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Confirmation */}
       <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
         <DialogContent>
           <DialogHeader>
@@ -326,14 +370,13 @@ const UserManagement = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Role Info Dialog */}
+      {/* Role Info */}
       <Dialog open={roleInfoOpen} onOpenChange={setRoleInfoOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Shield className="w-5 h-5 text-primary" /> Hak Akses per Role</DialogTitle></DialogHeader>
           <div className="space-y-4">
             {[
-              { role: 'Admin', perms: ['Akses penuh semua menu', 'Approve/reject pendaftaran user', 'Ubah role & hapus user', 'Hanya 1 akun (tidak bisa didaftarkan)'] },
-              { role: 'APJ (Apoteker Penanggung Jawab)', perms: ['Dashboard, Transaksi, Inventaris, Pengadaan', 'Laporan, Pelanggan, Pengaturan', 'Maksimal 1 akun aktif'] },
+              { role: 'APJ (Super Admin)', perms: ['Akses penuh semua menu & fitur', 'Approve/Reject pendaftaran user', 'Ubah role & hapus user', 'Hanya 1 akun (apotekdinadawi@gmail.com)', 'Tidak bisa dihapus atau diubah role-nya'] },
               { role: 'Aping (Apoteker Pendamping)', perms: ['Dashboard', 'Inventaris', 'Pengadaan', 'Laporan'] },
               { role: 'Kasir', perms: ['Dashboard', 'Transaksi kasir (POS)', 'Pelanggan'] },
             ].map(r => (

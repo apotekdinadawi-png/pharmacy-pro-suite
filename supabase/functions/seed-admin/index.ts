@@ -16,22 +16,37 @@ Deno.serve(async (req) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Check if admin already exists
-  const { data: existingUsers } = await supabase.auth.admin.listUsers();
-  const adminExists = existingUsers?.users?.some(u => u.email === "apotekdinadawi@gmail.com");
+  const MASTER_EMAIL = "apotekdinadawi@gmail.com";
+  const MASTER_PASSWORD = "dinaiwongbersama";
 
-  if (adminExists) {
-    return new Response(JSON.stringify({ message: "Admin already exists" }), {
+  // Check if master already exists
+  const { data: existingUsers } = await supabase.auth.admin.listUsers();
+  const masterUser = existingUsers?.users?.find(u => u.email === MASTER_EMAIL);
+
+  if (masterUser) {
+    // Ensure role is 'apj' and status is 'approved'
+    await supabase.from('user_roles').upsert(
+      { user_id: masterUser.id, role: 'apj' },
+      { onConflict: 'user_id,role' }
+    );
+    // Delete any non-apj roles for master
+    await supabase.from('user_roles').delete()
+      .eq('user_id', masterUser.id)
+      .neq('role', 'apj');
+    await supabase.from('profiles').update({ status: 'approved' })
+      .eq('user_id', masterUser.id);
+
+    return new Response(JSON.stringify({ message: "Master APJ account verified", userId: masterUser.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  // Create admin user
+  // Create master user
   const { data, error } = await supabase.auth.admin.createUser({
-    email: "apotekdinadawi@gmail.com",
-    password: "dinaiwongbersama",
+    email: MASTER_EMAIL,
+    password: MASTER_PASSWORD,
     email_confirm: true,
-    user_metadata: { full_name: "Admin Apotek", username: "admin" },
+    user_metadata: { full_name: "Apoteker Penanggung Jawab", username: "apj_master" },
   });
 
   if (error) {
@@ -41,7 +56,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  return new Response(JSON.stringify({ message: "Admin created", userId: data.user.id }), {
+  return new Response(JSON.stringify({ message: "Master APJ created", userId: data.user.id }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
