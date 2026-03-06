@@ -17,12 +17,26 @@ export interface AuthState {
   signOut: () => Promise<void>;
 }
 
-// Role-based menu access map
+const MASTER_EMAIL = 'apotekdinadawi@gmail.com';
+
+// APJ = Super Admin with full access
 export const roleMenuAccess: Record<AppRole, string[]> = {
   admin: ['dashboard', 'transactions', 'inventory', 'procurement', 'reports', 'customers', 'users', 'settings'],
-  apj: ['dashboard', 'transactions', 'inventory', 'procurement', 'reports', 'customers', 'settings'],
+  apj: ['dashboard', 'transactions', 'inventory', 'procurement', 'reports', 'customers', 'users', 'settings'],
   aping: ['dashboard', 'inventory', 'procurement', 'reports'],
   kasir: ['dashboard', 'transactions', 'customers'],
+};
+
+// Route-to-menu key mapping for route guards
+export const routeMenuMap: Record<string, string> = {
+  '/dashboard': 'dashboard',
+  '/transactions': 'transactions',
+  '/inventory': 'inventory',
+  '/procurement': 'procurement',
+  '/reports': 'reports',
+  '/customers': 'customers',
+  '/users': 'users',
+  '/settings': 'settings',
 };
 
 export const useAuth = (): AuthState => {
@@ -36,7 +50,7 @@ export const useAuth = (): AuthState => {
     try {
       const [profileRes, roleRes] = await Promise.all([
         supabase.from('profiles').select('full_name, username, phone, sipa, status').eq('user_id', userId).single(),
-        supabase.from('user_roles').select('role').eq('user_id', userId).single(),
+        supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
       ]);
       if (profileRes.data) setProfile(profileRes.data as AuthState['profile']);
       if (roleRes.data) setRole(roleRes.data.role as AppRole);
@@ -47,7 +61,7 @@ export const useAuth = (): AuthState => {
   }, []);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, sess) => {
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
@@ -77,9 +91,20 @@ export const useAuth = (): AuthState => {
   };
 
   const signUp = async (email: string, password: string, meta: { full_name: string; username: string; role: string }) => {
-    // Block admin registration
-    if (email.toLowerCase() === 'apotekdinadawi@gmail.com') {
+    // Block master email registration
+    if (email.toLowerCase() === MASTER_EMAIL) {
       return { error: 'Email ini tidak dapat digunakan untuk pendaftaran.' };
+    }
+
+    // Check blacklist
+    const { data: blacklisted } = await supabase
+      .from('blacklisted_emails')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (blacklisted) {
+      return { error: 'Email ini telah diblokir dari pendaftaran. Hubungi pengelola apotek.' };
     }
 
     const { data, error } = await supabase.auth.signUp({
@@ -93,11 +118,7 @@ export const useAuth = (): AuthState => {
     if (error) return { error: error.message };
 
     if (data.user) {
-      const roleMap: Record<string, AppRole> = {
-        'apj': 'apj',
-        'aping': 'aping',
-        'kasir': 'kasir',
-      };
+      const roleMap: Record<string, AppRole> = { apj: 'apj', aping: 'aping', kasir: 'kasir' };
       const appRole = roleMap[meta.role] || 'kasir';
       await supabase.from('user_roles').insert([{ user_id: data.user.id, role: appRole }]);
     }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,21 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+
+  // Auto-seed master APJ on first load
+  useEffect(() => {
+    const seedMaster = async () => {
+      setSeeding(true);
+      try {
+        await supabase.functions.invoke('seed-admin');
+      } catch {
+        // silent
+      }
+      setSeeding(false);
+    };
+    seedMaster();
+  }, []);
 
   if (user) {
     navigate("/dashboard", { replace: true });
@@ -49,13 +64,13 @@ const Login = () => {
 
     if (profileData?.status === 'pending') {
       await supabase.auth.signOut();
-      setError("Akun Anda sedang menunggu persetujuan Admin. Silakan tunggu.");
+      setError("Akun Anda sedang menunggu persetujuan Admin (APJ). Silakan tunggu.");
       setLoading(false);
       return;
     }
     if (profileData?.status === 'rejected') {
       await supabase.auth.signOut();
-      setError("Akun Anda ditolak oleh Admin. Hubungi pengelola apotek.");
+      setError("Akun Anda ditolak oleh Admin. Email Anda telah diblokir dari sistem.");
       setLoading(false);
       return;
     }
@@ -105,11 +120,16 @@ const Login = () => {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full gradient-primary text-primary-foreground font-semibold h-11" disabled={loading}>
+              <Button type="submit" className="w-full gradient-primary text-primary-foreground font-semibold h-11" disabled={loading || seeding}>
                 {loading ? (
                   <span className="flex items-center gap-2">
                     <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
                     Memproses...
+                  </span>
+                ) : seeding ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                    Menyiapkan sistem...
                   </span>
                 ) : (
                   "Masuk"

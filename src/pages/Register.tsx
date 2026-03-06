@@ -9,6 +9,8 @@ import { Eye, EyeOff, Pill, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
+const MASTER_EMAIL = 'apotekdinadawi@gmail.com';
+
 const Register = () => {
   const navigate = useNavigate();
   const { signUp } = useAuthContext();
@@ -24,7 +26,6 @@ const Register = () => {
   const [apjTaken, setApjTaken] = useState(false);
 
   useEffect(() => {
-    // Check if APJ role is already taken (approved or pending)
     const checkApj = async () => {
       const { data } = await supabase
         .from('user_roles')
@@ -32,7 +33,6 @@ const Register = () => {
         .eq('role', 'apj');
       
       if (data && data.length > 0) {
-        // Check if any of these users are approved or pending
         const { data: profiles } = await supabase
           .from('profiles')
           .select('user_id, status')
@@ -57,12 +57,24 @@ const Register = () => {
       setError("Format email tidak valid.");
       return;
     }
-    if (email.toLowerCase() === 'apotekdinadawi@gmail.com') {
+    if (email.toLowerCase() === MASTER_EMAIL) {
       setError("Email ini tidak dapat digunakan untuk pendaftaran.");
       return;
     }
     if (password.length < 6) {
       setError("Password minimal 6 karakter.");
+      return;
+    }
+
+    // Check blacklist
+    const { data: blacklisted } = await supabase
+      .from('blacklisted_emails')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (blacklisted) {
+      setError("Email ini telah diblokir dari pendaftaran. Hubungi pengelola apotek.");
       return;
     }
 
@@ -90,7 +102,7 @@ const Register = () => {
               <h2 className="text-xl font-bold text-foreground">Pendaftaran Berhasil!</h2>
               <p className="text-sm text-muted-foreground">
                 Akun Anda telah didaftarkan dengan status <b className="text-warning">Pending</b>.
-                Silakan tunggu persetujuan dari Admin untuk dapat login ke sistem.
+                Silakan tunggu persetujuan dari APJ (Apoteker Penanggung Jawab) untuk dapat login ke sistem.
               </p>
               <Button onClick={() => navigate("/")} className="w-full gradient-primary text-primary-foreground">
                 Kembali ke Login
@@ -115,7 +127,7 @@ const Register = () => {
             <Pill className="w-10 h-10 text-primary-foreground" />
           </div>
           <h1 className="text-3xl font-bold text-foreground">Daftar Akun</h1>
-          <p className="text-muted-foreground mt-1">Registrasi sebagai APJ, Aping, atau Kasir</p>
+          <p className="text-muted-foreground mt-1">Registrasi sebagai Aping atau Kasir</p>
         </div>
 
         <Card className="glass-card border-border/50">
@@ -179,7 +191,7 @@ const Register = () => {
                   </SelectContent>
                 </Select>
                 {apjTaken && (
-                  <p className="text-xs text-muted-foreground">Posisi APJ sudah terisi. Hubungi Admin jika ada pertanyaan.</p>
+                  <p className="text-xs text-muted-foreground">Posisi APJ sudah terisi. Hubungi APJ jika ada pertanyaan.</p>
                 )}
               </div>
 

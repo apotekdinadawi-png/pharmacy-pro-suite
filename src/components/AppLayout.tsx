@@ -1,9 +1,11 @@
-import { Outlet, Navigate } from "react-router-dom";
+import { Outlet, Navigate, useLocation } from "react-router-dom";
 import AppSidebar from "./AppSidebar";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { roleMenuAccess, routeMenuMap } from "@/hooks/useAuth";
 
 const AppLayout = () => {
-  const { user, loading } = useAuthContext();
+  const { user, role, loading } = useAuthContext();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -18,6 +20,17 @@ const AppLayout = () => {
 
   if (!user) {
     return <Navigate to="/" replace />;
+  }
+
+  // Route guard: check if current role has access to this route
+  if (role) {
+    const menuKey = routeMenuMap[location.pathname];
+    if (menuKey) {
+      const allowed = roleMenuAccess[role] || [];
+      if (!allowed.includes(menuKey)) {
+        return <Navigate to="/dashboard" replace />;
+      }
+    }
   }
 
   return (
