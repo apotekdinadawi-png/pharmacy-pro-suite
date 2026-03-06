@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      blacklisted_emails: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          reason?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
