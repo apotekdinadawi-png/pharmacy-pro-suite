@@ -67,6 +67,7 @@ const printSPUnified = (
       <div class="header-right">
         <div class="title">SURAT</div>
         <div class="title">PESANAN</div>
+        ${spType === 'Obat-Obat Tertentu' ? '<div class="title" style="font-size:20px">OBAT-OBAT TERTENTU</div>' : ''}
         ${isSpecial ? `<div class="special-badge">⚠ ${spType.toUpperCase()}</div>` : ''}
       </div>
       <div class="clear"></div>
