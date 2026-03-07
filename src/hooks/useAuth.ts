@@ -85,9 +85,88 @@ export const useAuth = (): AuthState => {
     return () => subscription.unsubscribe();
   }, [fetchProfileAndRole]);
 
+  // Realtime: listen for profile status changes so admin approval/rejection syncs instantly
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`profile-status-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newStatus = payload.new.status as AccountStatus;
+          setProfile(prev => prev ? { ...prev, status: newStatus } : prev);
+
+          // If status changed to non-approved, force sign out
+          if (newStatus !== 'approved') {
+            supabase.auth.signOut();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  // Realtime: listen for role changes
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`user-role-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_roles',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.new && typeof payload.new === 'object' && 'role' in payload.new) {
+            setRole((payload.new as { role: AppRole }).role);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+
+    // Strict gatekeeper: check profile status
+    if (data.user) {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('status')
+        .eq('user_id', data.user.id)
+        .maybeSingle();
+
+      const status = profileData?.status;
+
+      if (status !== 'approved') {
+        await supabase.auth.signOut();
+        if (status === 'rejected') {
+          return { error: 'Akun Anda telah ditolak oleh Admin. Hubungi APJ untuk informasi lebih lanjut.' };
+        }
+        return { error: 'Akun Anda belum disetujui oleh Admin. Silakan tunggu konfirmasi.' };
+      }
+    }
+
+    return { error: null };
   };
 
   const signUp = async (email: string, password: string, meta: { full_name: string; username: string; role: string }) => {
@@ -122,6 +201,9 @@ export const useAuth = (): AuthState => {
       const appRole = roleMap[meta.role] || 'kasir';
       await supabase.from('user_roles').insert([{ user_id: data.user.id, role: appRole }]);
     }
+
+    // Sign out immediately - user must wait for approval
+    await supabase.auth.signOut();
 
     return { error: null };
   };

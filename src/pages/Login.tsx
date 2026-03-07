@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn, user } = useAuthContext();
+  const { signIn, user, profile } = useAuthContext();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -32,10 +32,12 @@ const Login = () => {
     seedMaster();
   }, []);
 
-  if (user) {
-    navigate("/dashboard", { replace: true });
-    return null;
-  }
+  // Redirect if already logged in with approved status
+  useEffect(() => {
+    if (user && profile?.status === 'approved') {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [user, profile, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,33 +46,7 @@ const Login = () => {
 
     const { error: err } = await signIn(email, password);
     if (err) {
-      setError("Email atau password salah. Silakan coba lagi.");
-      setLoading(false);
-      return;
-    }
-
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
-      setError("Gagal mendapatkan data user.");
-      setLoading(false);
-      return;
-    }
-
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('status')
-      .eq('user_id', userData.user.id)
-      .single();
-
-    if (profileData?.status === 'pending') {
-      await supabase.auth.signOut();
-      setError("Akun Anda sedang menunggu persetujuan Admin (APJ). Silakan tunggu.");
-      setLoading(false);
-      return;
-    }
-    if (profileData?.status === 'rejected') {
-      await supabase.auth.signOut();
-      setError("Akun Anda ditolak oleh Admin. Email Anda telah diblokir dari sistem.");
+      setError(err);
       setLoading(false);
       return;
     }

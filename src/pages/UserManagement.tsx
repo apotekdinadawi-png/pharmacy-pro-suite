@@ -99,6 +99,14 @@ const UserManagement = () => {
     fetchUsers();
   };
 
+  const handleChangeStatus = async (userId: string, newStatus: string) => {
+    const { error } = await supabase.from('profiles').update({ status: newStatus }).eq('user_id', userId);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    const statusLabel = newStatus === 'approved' ? 'Disetujui' : newStatus === 'rejected' ? 'Ditolak' : 'Pending';
+    toast({ title: `Status: ${statusLabel}`, description: `Status user telah diubah menjadi ${statusLabel}.` });
+    fetchUsers();
+  };
+
   const handleRejectAndBlacklist = async (user: UserProfile) => {
     // Reject and blacklist
     await supabase.from('profiles').update({ status: 'rejected' }).eq('user_id', user.user_id);
@@ -307,7 +315,22 @@ const UserManagement = () => {
                           </Select>
                         )}
                       </TableCell>
-                      <TableCell>{statusBadge(u.status)}</TableCell>
+                      <TableCell>
+                        {isMasterApj ? (
+                          statusBadge(u.status)
+                        ) : (
+                          <Select value={u.status} onValueChange={(v) => handleChangeStatus(u.user_id, v)}>
+                            <SelectTrigger className="h-8 w-36">
+                              {statusBadge(u.status)}
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="approved">✅ Aktif</SelectItem>
+                              <SelectItem value="pending">⏳ Pending</SelectItem>
+                              <SelectItem value="rejected">❌ Ditolak</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{new Date(u.created_at).toLocaleDateString('id-ID')}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
