@@ -19,22 +19,53 @@ Deno.serve(async (req) => {
   const MASTER_EMAIL = "apotekdinadawi@gmail.com";
   const MASTER_PASSWORD = "dinaiwongbersama";
 
+  const ensureMasterAccess = async (userId: string) => {
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existingProfile) {
+      await supabase
+        .from('profiles')
+        .update({
+          full_name: "Apoteker Penanggung Jawab",
+          username: "apj_master",
+          status: "approved",
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId);
+    } else {
+      await supabase.from('profiles').insert({
+        user_id: userId,
+        full_name: "Apoteker Penanggung Jawab",
+        username: "apj_master",
+        phone: "",
+        sipa: "",
+        avatar_url: "",
+        status: "approved",
+      });
+    }
+
+    await supabase.from('user_roles').upsert(
+      { user_id: userId, role: 'apj' },
+      { onConflict: 'user_id,role' }
+    );
+
+    await supabase
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId)
+      .neq('role', 'apj');
+  };
+
   // Check if master already exists
   const { data: existingUsers } = await supabase.auth.admin.listUsers();
   const masterUser = existingUsers?.users?.find(u => u.email === MASTER_EMAIL);
 
   if (masterUser) {
-    // Ensure role is 'apj' and status is 'approved'
-    await supabase.from('user_roles').upsert(
-      { user_id: masterUser.id, role: 'apj' },
-      { onConflict: 'user_id,role' }
-    );
-    // Delete any non-apj roles for master
-    await supabase.from('user_roles').delete()
-      .eq('user_id', masterUser.id)
-      .neq('role', 'apj');
-    await supabase.from('profiles').update({ status: 'approved' })
-      .eq('user_id', masterUser.id);
+    await ensureMasterAccess(masterUser.id);
 
     return new Response(JSON.stringify({ message: "Master APJ account verified", userId: masterUser.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -56,7 +87,11 @@ Deno.serve(async (req) => {
     });
   }
 
-  return new Response(JSON.stringify({ message: "Master APJ created", userId: data.user.id }), {
+  if (data.user?.id) {
+    await ensureMasterAccess(data.user.id);
+  }
+
+  return new Response(JSON.stringify({ message: "Master APJ created", userId: data.user?.id ?? null }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
