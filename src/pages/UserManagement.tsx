@@ -348,7 +348,7 @@ const UserManagement = () => {
                         ) : (
                           <Select value={u.status} onValueChange={(v) => handleChangeStatus(u.user_id, v)}>
                             <SelectTrigger className="h-8 w-36">
-                              {statusBadge(u.status)}
+                              <span className="text-xs font-medium">{u.status === 'approved' ? '✅ Aktif' : u.status === 'pending' ? '⏳ Pending' : u.status === 'rejected' ? '❌ Ditolak' : u.status}</span>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="approved">✅ Aktif</SelectItem>

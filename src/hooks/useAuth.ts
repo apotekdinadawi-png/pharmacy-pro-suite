@@ -145,10 +145,8 @@ export const useAuth = (): AuthState => {
           table: 'user_roles',
           filter: `user_id=eq.${user.id}`,
         },
-        (payload) => {
-          if (payload.new && typeof payload.new === 'object' && 'role' in payload.new) {
-            setRole((payload.new as { role: AppRole }).role);
-          }
+        () => {
+          fetchProfileAndRole(user.id);
         }
       )
       .subscribe();
