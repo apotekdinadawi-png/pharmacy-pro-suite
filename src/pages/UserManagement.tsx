@@ -84,7 +84,9 @@ const UserManagement = () => {
     const { data: profiles } = await supabase.from('profiles').select('*');
     const { data: roles } = await supabase.from('user_roles').select('user_id, role');
 
-    const roleMap = new Map((roles || []).map(r => [r.user_id, r.role as AppRole]));
+    const roleMap = resolveRoleFromRows(
+      ((roles || []) as Array<{ user_id: string; role: AppRole }>)
+    );
 
     // Get current user to identify master
     const { data: { user: currentUser } } = await supabase.auth.getUser();
