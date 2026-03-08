@@ -176,15 +176,14 @@ const UserManagement = () => {
       }
     }
 
-    // Use upsert: update if exists, insert if not
     const { error } = await supabase.from('user_roles').upsert(
       { user_id: userId, role: newRole },
-      { onConflict: 'user_id,role' }
+      { onConflict: 'user_id' }
     );
+
     if (error) {
-      // If upsert with conflict fails (different role), delete old and insert new
-      await supabase.from('user_roles').delete().eq('user_id', userId);
-      await supabase.from('user_roles').insert([{ user_id: userId, role: newRole }]);
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
     }
     toast({ title: "Role Diperbarui" });
     fetchUsers();
