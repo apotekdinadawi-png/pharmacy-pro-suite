@@ -190,17 +190,14 @@ export const useAuth = (): AuthState => {
       email,
       password,
       options: {
-        data: { full_name: meta.full_name, username: meta.username },
+        data: { full_name: meta.full_name, username: meta.username, role: meta.role },
         emailRedirectTo: window.location.origin,
       },
     });
     if (error) return { error: error.message };
 
-    if (data.user) {
-      const roleMap: Record<string, AppRole> = { apj: 'apj', aping: 'aping', kasir: 'kasir' };
-      const appRole = roleMap[meta.role] || 'kasir';
-      await supabase.from('user_roles').insert([{ user_id: data.user.id, role: appRole }]);
-    }
+    // Role is now handled by the handle_new_user trigger via metadata
+    // No need to manually insert into user_roles
 
     // Sign out immediately - user must wait for approval
     await supabase.auth.signOut();
