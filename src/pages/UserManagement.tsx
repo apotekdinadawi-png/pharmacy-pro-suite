@@ -333,7 +333,7 @@ const UserManagement = () => {
                         ) : (
                           <Select value={u.role || 'kasir'} onValueChange={(v) => handleChangeRole(u.user_id, v as AppRole)}>
                             <SelectTrigger className="h-8 w-44">
-                              <Badge className={roleBadgeStyle[u.role || 'kasir'] || 'bg-muted text-muted-foreground'}>{roleLabels[u.role || 'kasir'] || u.role}</Badge>
+                              <span className="text-xs font-medium">{roleLabels[u.role || 'kasir'] || u.role}</span>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="aping">Aping</SelectItem>
