@@ -41,6 +41,26 @@ const roleBadgeStyle: Record<string, string> = {
   kasir: 'bg-muted text-muted-foreground border-border',
 };
 
+const rolePriority: Record<AppRole, number> = {
+  kasir: 1,
+  aping: 2,
+  admin: 3,
+  apj: 4,
+};
+
+const resolveRoleFromRows = (rows: Array<{ user_id: string; role: AppRole }>) => {
+  const roleMap = new Map<string, AppRole>();
+
+  rows.forEach((row) => {
+    const current = roleMap.get(row.user_id);
+    if (!current || rolePriority[row.role] > rolePriority[current]) {
+      roleMap.set(row.user_id, row.role);
+    }
+  });
+
+  return roleMap;
+};
+
 const statusBadge = (status: string) => {
   switch (status) {
     case 'approved': return <Badge className="bg-success/10 text-success border-success/20"><UserCheck className="w-3 h-3 mr-1" />Aktif</Badge>;
