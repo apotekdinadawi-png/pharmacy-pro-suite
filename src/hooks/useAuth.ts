@@ -39,6 +39,21 @@ export const routeMenuMap: Record<string, string> = {
   '/settings': 'settings',
 };
 
+const rolePriority: Record<AppRole, number> = {
+  kasir: 1,
+  aping: 2,
+  admin: 3,
+  apj: 4,
+};
+
+const resolveRole = (rows: Array<{ role: AppRole }> | null): AppRole => {
+  if (!rows || rows.length === 0) return 'kasir';
+
+  return rows.reduce<AppRole>((best, current) =>
+    rolePriority[current.role] > rolePriority[best] ? current.role : best,
+  'kasir');
+};
+
 export const useAuth = (): AuthState => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -50,11 +65,11 @@ export const useAuth = (): AuthState => {
     try {
       const [profileRes, roleRes] = await Promise.all([
         supabase.from('profiles').select('full_name, username, phone, sipa, status').eq('user_id', userId).single(),
-        supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
+        supabase.from('user_roles').select('role').eq('user_id', userId),
       ]);
+
       if (profileRes.data) setProfile(profileRes.data as AuthState['profile']);
-      if (roleRes.data) setRole(roleRes.data.role as AppRole);
-      else setRole('kasir');
+      setRole(resolveRole((roleRes.data || []) as Array<{ role: AppRole }>));
     } catch {
       setRole('kasir');
     }
@@ -130,10 +145,8 @@ export const useAuth = (): AuthState => {
           table: 'user_roles',
           filter: `user_id=eq.${user.id}`,
         },
-        (payload) => {
-          if (payload.new && typeof payload.new === 'object' && 'role' in payload.new) {
-            setRole((payload.new as { role: AppRole }).role);
-          }
+        () => {
+          fetchProfileAndRole(user.id);
         }
       )
       .subscribe();

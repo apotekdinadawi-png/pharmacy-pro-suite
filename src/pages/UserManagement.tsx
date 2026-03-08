@@ -41,6 +41,26 @@ const roleBadgeStyle: Record<string, string> = {
   kasir: 'bg-muted text-muted-foreground border-border',
 };
 
+const rolePriority: Record<AppRole, number> = {
+  kasir: 1,
+  aping: 2,
+  admin: 3,
+  apj: 4,
+};
+
+const resolveRoleFromRows = (rows: Array<{ user_id: string; role: AppRole }>) => {
+  const roleMap = new Map<string, AppRole>();
+
+  rows.forEach((row) => {
+    const current = roleMap.get(row.user_id);
+    if (!current || rolePriority[row.role] > rolePriority[current]) {
+      roleMap.set(row.user_id, row.role);
+    }
+  });
+
+  return roleMap;
+};
+
 const statusBadge = (status: string) => {
   switch (status) {
     case 'approved': return <Badge className="bg-success/10 text-success border-success/20"><UserCheck className="w-3 h-3 mr-1" />Aktif</Badge>;
@@ -64,7 +84,9 @@ const UserManagement = () => {
     const { data: profiles } = await supabase.from('profiles').select('*');
     const { data: roles } = await supabase.from('user_roles').select('user_id, role');
 
-    const roleMap = new Map((roles || []).map(r => [r.user_id, r.role as AppRole]));
+    const roleMap = resolveRoleFromRows(
+      ((roles || []) as Array<{ user_id: string; role: AppRole }>)
+    );
 
     // Get current user to identify master
     const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -154,15 +176,14 @@ const UserManagement = () => {
       }
     }
 
-    // Use upsert: update if exists, insert if not
     const { error } = await supabase.from('user_roles').upsert(
       { user_id: userId, role: newRole },
-      { onConflict: 'user_id,role' }
+      { onConflict: 'user_id' }
     );
+
     if (error) {
-      // If upsert with conflict fails (different role), delete old and insert new
-      await supabase.from('user_roles').delete().eq('user_id', userId);
-      await supabase.from('user_roles').insert([{ user_id: userId, role: newRole }]);
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
     }
     toast({ title: "Role Diperbarui" });
     fetchUsers();
@@ -312,7 +333,7 @@ const UserManagement = () => {
                         ) : (
                           <Select value={u.role || 'kasir'} onValueChange={(v) => handleChangeRole(u.user_id, v as AppRole)}>
                             <SelectTrigger className="h-8 w-44">
-                              <Badge className={roleBadgeStyle[u.role || 'kasir'] || 'bg-muted text-muted-foreground'}>{roleLabels[u.role || 'kasir'] || u.role}</Badge>
+                              <span className="text-xs font-medium">{roleLabels[u.role || 'kasir'] || u.role}</span>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="aping">Aping</SelectItem>
@@ -327,7 +348,7 @@ const UserManagement = () => {
                         ) : (
                           <Select value={u.status} onValueChange={(v) => handleChangeStatus(u.user_id, v)}>
                             <SelectTrigger className="h-8 w-36">
-                              {statusBadge(u.status)}
+                              <span className="text-xs font-medium">{u.status === 'approved' ? '✅ Aktif' : u.status === 'pending' ? '⏳ Pending' : u.status === 'rejected' ? '❌ Ditolak' : u.status}</span>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="approved">✅ Aktif</SelectItem>
