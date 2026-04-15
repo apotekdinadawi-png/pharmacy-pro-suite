@@ -56,6 +56,63 @@ export type Database = {
         }
         Relationships: []
       }
+      customers: {
+        Row: {
+          address: string
+          allergies: Json
+          birth_date: string
+          created_at: string
+          id: string
+          join_date: string
+          last_visit: string
+          medical_notes: string
+          member_id: string
+          name: string
+          phone: string
+          points: number
+          tier: string
+          total_spent: number
+          total_visits: number
+          updated_at: string
+        }
+        Insert: {
+          address?: string
+          allergies?: Json
+          birth_date?: string
+          created_at?: string
+          id?: string
+          join_date?: string
+          last_visit?: string
+          medical_notes?: string
+          member_id?: string
+          name?: string
+          phone?: string
+          points?: number
+          tier?: string
+          total_spent?: number
+          total_visits?: number
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          allergies?: Json
+          birth_date?: string
+          created_at?: string
+          id?: string
+          join_date?: string
+          last_visit?: string
+          medical_notes?: string
+          member_id?: string
+          name?: string
+          phone?: string
+          points?: number
+          tier?: string
+          total_spent?: number
+          total_visits?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       drugs: {
         Row: {
           active_ingredient: string
