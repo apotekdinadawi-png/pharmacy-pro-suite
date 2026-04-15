@@ -2,9 +2,11 @@ import { Outlet, Navigate, useLocation } from "react-router-dom";
 import AppSidebar from "./AppSidebar";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { roleMenuAccess, routeMenuMap } from "@/hooks/useAuth";
+import { useInitStores } from "@/hooks/useInitStores";
 
 const AppLayout = () => {
   const { user, role, loading } = useAuthContext();
+  const { loading: storesLoading } = useInitStores();
   const location = useLocation();
 
   if (loading) {

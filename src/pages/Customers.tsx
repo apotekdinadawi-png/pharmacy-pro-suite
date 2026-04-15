@@ -17,69 +17,7 @@ import {
   History, Award, ShoppingBag,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-
-type MemberTier = "Bronze" | "Silver" | "Gold" | "Platinum";
-
-interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  address: string;
-  birthDate: string;
-  memberId: string;
-  tier: MemberTier;
-  points: number;
-  totalSpent: number;
-  totalVisits: number;
-  allergies: string[];
-  medicalNotes: string;
-  joinDate: string;
-  lastVisit: string;
-}
-
-// Persisted customer store
-interface CustomerState {
-  customers: Customer[];
-  addCustomer: (c: Omit<Customer, 'id' | 'memberId' | 'tier' | 'points' | 'totalSpent' | 'totalVisits' | 'joinDate' | 'lastVisit'>) => void;
-  updateCustomer: (id: string, data: Partial<Customer>) => void;
-  removeCustomer: (id: string) => void;
-  redeemPoints: (id: string, amount: number) => void;
-}
-
-const useCustomerStore = create<CustomerState>()(
-  persist(
-    (set, get) => ({
-      customers: [],
-      addCustomer: (c) => set((s) => {
-        const num = s.customers.length + 1;
-        const newC: Customer = {
-          ...c,
-          id: crypto.randomUUID(),
-          memberId: `MBR-${new Date().getFullYear()}-${String(num).padStart(3, '0')}`,
-          tier: 'Bronze',
-          points: 0,
-          totalSpent: 0,
-          totalVisits: 0,
-          joinDate: new Date().toISOString().slice(0, 10),
-          lastVisit: '-',
-        };
-        return { customers: [...s.customers, newC] };
-      }),
-      updateCustomer: (id, data) => set((s) => ({
-        customers: s.customers.map(c => c.id === id ? { ...c, ...data } : c),
-      })),
-      removeCustomer: (id) => set((s) => ({
-        customers: s.customers.filter(c => c.id !== id),
-      })),
-      redeemPoints: (id, amount) => set((s) => ({
-        customers: s.customers.map(c => c.id === id ? { ...c, points: Math.max(0, c.points - amount) } : c),
-      })),
-    }),
-    { name: 'apotek-customers' }
-  )
-);
+import { useCustomerStore, type Customer, type MemberTier } from "@/stores/useCustomerStore";
 
 const tierConfig: Record<MemberTier, { min: number; color: string; discount: number; pointMultiplier: number }> = {
   Bronze: { min: 0, color: "bg-orange-500/10 text-orange-400 border-orange-500/20", discount: 0, pointMultiplier: 1 },
