@@ -16,6 +16,7 @@ import { useProcurementStore, type Supplier, type SPItem, type SPRecord } from "
 import { useInventoryStore } from "@/stores/useInventoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { formatRupiah } from "@/lib/currency";
+import { useCanEdit } from "@/hooks/useCanEdit";
 
 // ========== UNIFIED SP PRINT FUNCTION ==========
 const printSPUnified = (
