@@ -424,7 +424,7 @@ const SupplierTab = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input placeholder="Cari supplier..." className="pl-10 h-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-            <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Tambah PBF</Button>
+            {canEdit && <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Tambah PBF</Button>}
           </div>
         </div>
       </CardHeader>
