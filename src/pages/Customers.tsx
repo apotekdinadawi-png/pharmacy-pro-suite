@@ -197,20 +197,22 @@ const Customers = () => {
                     ) : <span className="text-xs text-muted-foreground">-</span>}
                   </TableCell>
                   <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                    <div className="flex justify-end gap-1">
-                      <Button size="icon" variant="ghost" onClick={() => openEdit(c)}><Edit2 className="w-4 h-4" /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => setRedeemDialog(c)}><Gift className="w-4 h-4 text-primary" /></Button>
-                      {deleteConfirm === c.id ? (
-                        <div className="flex gap-1">
-                          <Button size="sm" variant="destructive" onClick={() => handleDelete(c.id)}>Ya</Button>
-                          <Button size="sm" variant="outline" onClick={() => setDeleteConfirm(null)}>Batal</Button>
-                        </div>
-                      ) : (
-                        <Button size="icon" variant="ghost" className="text-destructive" onClick={() => setDeleteConfirm(c.id)}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
+                    {canEdit ? (
+                      <div className="flex justify-end gap-1">
+                        <Button size="icon" variant="ghost" onClick={() => openEdit(c)}><Edit2 className="w-4 h-4" /></Button>
+                        <Button size="icon" variant="ghost" onClick={() => setRedeemDialog(c)}><Gift className="w-4 h-4 text-primary" /></Button>
+                        {deleteConfirm === c.id ? (
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="destructive" onClick={() => handleDelete(c.id)}>Ya</Button>
+                            <Button size="sm" variant="outline" onClick={() => setDeleteConfirm(null)}>Batal</Button>
+                          </div>
+                        ) : (
+                          <Button size="icon" variant="ghost" className="text-destructive" onClick={() => setDeleteConfirm(c.id)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ) : <span className="text-xs text-muted-foreground">—</span>}
                   </TableCell>
                 </TableRow>
               ))}
