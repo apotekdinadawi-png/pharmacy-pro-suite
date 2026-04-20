@@ -59,6 +59,14 @@ const AppSidebar = () => {
         )}
       </div>
 
+      {/* APJ label (static) */}
+      {!collapsed && (
+        <div className="px-4 py-2 border-b border-sidebar-border bg-sidebar-accent/20">
+          <p className="text-[10px] text-sidebar-foreground/50 uppercase tracking-wider">Apoteker Penanggung Jawab</p>
+          <p className="text-xs text-sidebar-foreground font-semibold truncate">Apt. Madinatul Adawiyah, S.Farm</p>
+        </div>
+      )}
+
       {/* User info */}
       {!collapsed && profile && (
         <div className="px-4 py-2 border-b border-sidebar-border">
