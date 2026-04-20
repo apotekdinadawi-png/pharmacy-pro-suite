@@ -437,6 +437,7 @@ const GRNTab = () => {
                     <TableHead>Nama Obat</TableHead>
                     <TableHead className="w-20">Qty</TableHead>
                     <TableHead className="w-28">Satuan</TableHead>
+                    <TableHead className="w-32">Konversi ke base unit</TableHead>
                     <TableHead>No. Batch</TableHead>
                     <TableHead className="w-32">Exp. Date</TableHead>
                     <TableHead className="w-32">Harga Beli</TableHead>
@@ -447,6 +448,9 @@ const GRNTab = () => {
                 <TableBody>
                   {items.map((row, idx) => {
                     const ppnPrice = row.buyPrice ? Math.round(Number(row.buyPrice) * (1 + business.ppnPercent / 100)) : 0;
+                    const drug = drugs.find((d) => d.id === row.drugId);
+                    const conv = drug?.conversions.find((c) => c.from === row.unit && c.to === drug.baseUnit);
+                    const previewQty = row.convertToBase && conv && row.qty ? Number(row.qty) * conv.factor : Number(row.qty || 0);
                     return (
                       <TableRow key={idx}>
                         <TableCell>
@@ -465,6 +469,19 @@ const GRNTab = () => {
                               {useSettingsStore.getState().masterData.units.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`conv-${idx}`}
+                              checked={row.convertToBase}
+                              onCheckedChange={(v) => updateRow(idx, "convertToBase", Boolean(v))}
+                              disabled={!conv}
+                            />
+                            <label htmlFor={`conv-${idx}`} className="text-xs text-muted-foreground cursor-pointer">
+                              {conv ? `→ ${previewQty} ${drug?.baseUnit}` : (drug ? "Tidak ada konversi" : "—")}
+                            </label>
+                          </div>
                         </TableCell>
                         <TableCell><Input className="h-9" placeholder="B-2026-XXX" value={row.batch} onChange={(e) => updateRow(idx, "batch", e.target.value)} /></TableCell>
                         <TableCell><Input className="h-9" type="month" value={row.ed} onChange={(e) => updateRow(idx, "ed", e.target.value)} /></TableCell>
