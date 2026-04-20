@@ -129,14 +129,30 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     };
 
     const units: UnitItem[] = (unitsRes.data || []).map((u: any) => ({ id: u.id, name: u.name }));
-    const categories: CategoryItem[] = (categoriesRes.data || []).map((c: any) => ({ id: c.id, name: c.name }));
+    const dbCategories: CategoryItem[] = (categoriesRes.data || []).map((c: any) => ({ id: c.id, name: c.name }));
+
+    // Permanent built-in categories (always available, cannot be removed).
+    // Merged with DB categories — DB version wins if name matches.
+    const PERMANENT_CATEGORIES: CategoryItem[] = [
+      { id: '__perm_alkes__', name: 'ALKES' },
+      { id: '__perm_obat_bebas__', name: 'Obat Bebas' },
+      { id: '__perm_obat_bebas_terbatas__', name: 'Obat Bebas Terbatas' },
+      { id: '__perm_obat_keras__', name: 'Obat Keras' },
+      { id: '__perm_obat_psikotropika__', name: 'Obat Psikotropika' },
+      { id: '__perm_obat_narkotika__', name: 'Obat Narkotika' },
+    ];
+    const dbNames = new Set(dbCategories.map((c) => c.name.toLowerCase()));
+    const merged = [
+      ...dbCategories,
+      ...PERMANENT_CATEGORIES.filter((p) => !dbNames.has(p.name.toLowerCase())),
+    ];
 
     set({
       business: { ...defaultBusiness, ...getVal('business', {}) },
       inventory: { ...defaultInventory, ...getVal('inventory', {}) },
       loyalty: { ...defaultLoyalty, ...getVal('loyalty', {}) },
       receipt: { ...defaultReceipt, ...getVal('receipt', {}) },
-      masterData: { units, categories },
+      masterData: { units, categories: merged },
       _hasHydrated: true,
     });
   },
