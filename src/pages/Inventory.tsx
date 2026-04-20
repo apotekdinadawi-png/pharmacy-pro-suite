@@ -33,6 +33,7 @@ const emptyForm: Omit<DrugMaster, 'id'> = {
 const MasterObatTab = () => {
   const { drugs, addDrug, updateDrug, removeDrug } = useInventoryStore();
   const { masterData } = useSettingsStore();
+  const canEdit = useCanEdit();
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
