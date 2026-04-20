@@ -339,11 +339,19 @@ const GRNTab = () => {
       const drug = drugs.find((d) => d.id === i.drugId);
       const rawPrice = Number(i.buyPrice);
       const priceWithPPN = Math.round(rawPrice * ppnMultiplier);
+      const inputQty = Number(i.qty);
+      // Bug fix Oskadon: hanya konversi ke base unit jika checkbox dicentang
+      // dan ada konversi yang cocok (from = unit input, to = baseUnit obat)
+      let finalQty = inputQty;
+      if (i.convertToBase && drug) {
+        const conv = drug.conversions.find((c) => c.from === i.unit && c.to === drug.baseUnit);
+        if (conv) finalQty = inputQty * conv.factor;
+      }
       return {
         drugId: i.drugId,
         drugName: drug?.name || '',
-        qty: Number(i.qty),
-        unit: i.unit || drug?.baseUnit || '',
+        qty: finalQty,
+        unit: i.convertToBase && drug ? drug.baseUnit : (i.unit || drug?.baseUnit || ''),
         batch: i.batch,
         expDate: i.ed,
         buyPrice: rawPrice,
