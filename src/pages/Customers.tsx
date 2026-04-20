@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useCustomerStore, type Customer, type MemberTier } from "@/stores/useCustomerStore";
+import { useCanEdit } from "@/hooks/useCanEdit";
 
 const tierConfig: Record<MemberTier, { min: number; color: string; discount: number; pointMultiplier: number }> = {
   Bronze: { min: 0, color: "bg-orange-500/10 text-orange-400 border-orange-500/20", discount: 0, pointMultiplier: 1 },
@@ -30,6 +31,7 @@ const fmtRp = (n: number) => `Rp ${n.toLocaleString("id-ID")}`;
 
 const Customers = () => {
   const { customers, addCustomer, updateCustomer, removeCustomer, redeemPoints } = useCustomerStore();
+  const canEdit = useCanEdit();
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -113,7 +115,7 @@ const Customers = () => {
           <h1 className="text-2xl font-bold text-foreground">Pelanggan (CRM)</h1>
           <p className="text-sm text-muted-foreground">Membership, poin loyalitas, & peringatan alergi. Data tersimpan permanen.</p>
         </div>
-        <Button onClick={openAdd}><UserPlus className="w-4 h-4 mr-2" /> Tambah Pelanggan</Button>
+        {canEdit && <Button onClick={openAdd}><UserPlus className="w-4 h-4 mr-2" /> Tambah Pelanggan</Button>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -195,20 +197,22 @@ const Customers = () => {
                     ) : <span className="text-xs text-muted-foreground">-</span>}
                   </TableCell>
                   <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                    <div className="flex justify-end gap-1">
-                      <Button size="icon" variant="ghost" onClick={() => openEdit(c)}><Edit2 className="w-4 h-4" /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => setRedeemDialog(c)}><Gift className="w-4 h-4 text-primary" /></Button>
-                      {deleteConfirm === c.id ? (
-                        <div className="flex gap-1">
-                          <Button size="sm" variant="destructive" onClick={() => handleDelete(c.id)}>Ya</Button>
-                          <Button size="sm" variant="outline" onClick={() => setDeleteConfirm(null)}>Batal</Button>
-                        </div>
-                      ) : (
-                        <Button size="icon" variant="ghost" className="text-destructive" onClick={() => setDeleteConfirm(c.id)}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
+                    {canEdit ? (
+                      <div className="flex justify-end gap-1">
+                        <Button size="icon" variant="ghost" onClick={() => openEdit(c)}><Edit2 className="w-4 h-4" /></Button>
+                        <Button size="icon" variant="ghost" onClick={() => setRedeemDialog(c)}><Gift className="w-4 h-4 text-primary" /></Button>
+                        {deleteConfirm === c.id ? (
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="destructive" onClick={() => handleDelete(c.id)}>Ya</Button>
+                            <Button size="sm" variant="outline" onClick={() => setDeleteConfirm(null)}>Batal</Button>
+                          </div>
+                        ) : (
+                          <Button size="icon" variant="ghost" className="text-destructive" onClick={() => setDeleteConfirm(c.id)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ) : <span className="text-xs text-muted-foreground">—</span>}
                   </TableCell>
                 </TableRow>
               ))}

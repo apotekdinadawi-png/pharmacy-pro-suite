@@ -16,6 +16,7 @@ import { useProcurementStore, type Supplier, type SPItem, type SPRecord } from "
 import { useInventoryStore } from "@/stores/useInventoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { formatRupiah } from "@/lib/currency";
+import { useCanEdit } from "@/hooks/useCanEdit";
 
 // ========== UNIFIED SP PRINT FUNCTION ==========
 const printSPUnified = (
@@ -394,6 +395,7 @@ const RiwayatSPTab = () => {
 // ========== SUPPLIER TAB ==========
 const SupplierTab = () => {
   const { suppliers, addSupplier, updateSupplier, removeSupplier } = useProcurementStore();
+  const canEdit = useCanEdit();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -422,7 +424,7 @@ const SupplierTab = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input placeholder="Cari supplier..." className="pl-10 h-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-            <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Tambah PBF</Button>
+            {canEdit && <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Tambah PBF</Button>}
           </div>
         </div>
       </CardHeader>
@@ -446,10 +448,12 @@ const SupplierTab = () => {
                     <TableCell className="text-xs">{s.noIzinPBF}</TableCell>
                     <TableCell className="text-xs">{s.noCDOB || '—'}</TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil className="w-3 h-3" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { removeSupplier(s.id); toast({ title: "Dihapus" }); }}><Trash2 className="w-3 h-3" /></Button>
-                      </div>
+                      {canEdit ? (
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Pencil className="w-3 h-3" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { removeSupplier(s.id); toast({ title: "Dihapus" }); }}><Trash2 className="w-3 h-3" /></Button>
+                        </div>
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
                     </TableCell>
                   </TableRow>
                 ))}

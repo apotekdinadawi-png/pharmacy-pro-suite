@@ -14,6 +14,8 @@ import { useInventoryStore, type DrugMaster } from "@/stores/useInventoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useProcurementStore } from "@/stores/useProcurementStore";
 import { formatRupiah } from "@/lib/currency";
+import { useCanEdit } from "@/hooks/useCanEdit";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const categoryColor: Record<string, string> = {
   "Obat Bebas": "bg-success text-success-foreground",
@@ -31,6 +33,7 @@ const emptyForm: Omit<DrugMaster, 'id'> = {
 const MasterObatTab = () => {
   const { drugs, addDrug, updateDrug, removeDrug } = useInventoryStore();
   const { masterData } = useSettingsStore();
+  const canEdit = useCanEdit();
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -68,7 +71,7 @@ const MasterObatTab = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input placeholder="Cari nama / barcode / kegunaan..." className="pl-10 h-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-            <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Tambah Obat</Button>
+            {canEdit && <Button size="sm" onClick={openAdd}><Plus className="w-4 h-4 mr-1" /> Tambah Obat</Button>}
           </div>
         </div>
       </CardHeader>
@@ -109,10 +112,12 @@ const MasterObatTab = () => {
                       </TableCell>
                       <TableCell className="text-right">{formatRupiah(item.sellPrice)}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}><Pencil className="w-3 h-3" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { removeDrug(item.id); toast({ title: "Dihapus", description: `${item.name} dihapus dari master.` }); }}><Trash2 className="w-3 h-3" /></Button>
-                        </div>
+                        {canEdit ? (
+                          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}><Pencil className="w-3 h-3" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { removeDrug(item.id); toast({ title: "Dihapus", description: `${item.name} dihapus dari master.` }); }}><Trash2 className="w-3 h-3" /></Button>
+                          </div>
+                        ) : <span className="text-xs text-muted-foreground">—</span>}
                       </TableCell>
                     </TableRow>
                     {expanded === item.id && (
@@ -304,10 +309,10 @@ const GRNTab = () => {
   const [invoiceNo, setInvoiceNo] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [receiveDate, setReceiveDate] = useState(new Date().toISOString().split('T')[0]);
-  const [items, setItems] = useState([{ drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "" }]);
+  const [items, setItems] = useState([{ drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "", convertToBase: false }]);
 
-  const addRow = () => setItems([...items, { drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "" }]);
-  const updateRow = (idx: number, field: string, value: string) => {
+  const addRow = () => setItems([...items, { drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "", convertToBase: false }]);
+  const updateRow = (idx: number, field: string, value: string | boolean) => {
     const updated = [...items];
     updated[idx] = { ...updated[idx], [field]: value };
     setItems(updated);
@@ -334,11 +339,19 @@ const GRNTab = () => {
       const drug = drugs.find((d) => d.id === i.drugId);
       const rawPrice = Number(i.buyPrice);
       const priceWithPPN = Math.round(rawPrice * ppnMultiplier);
+      const inputQty = Number(i.qty);
+      // Bug fix Oskadon: hanya konversi ke base unit jika checkbox dicentang
+      // dan ada konversi yang cocok (from = unit input, to = baseUnit obat)
+      let finalQty = inputQty;
+      if (i.convertToBase && drug) {
+        const conv = drug.conversions.find((c) => c.from === i.unit && c.to === drug.baseUnit);
+        if (conv) finalQty = inputQty * conv.factor;
+      }
       return {
         drugId: i.drugId,
         drugName: drug?.name || '',
-        qty: Number(i.qty),
-        unit: i.unit || drug?.baseUnit || '',
+        qty: finalQty,
+        unit: i.convertToBase && drug ? drug.baseUnit : (i.unit || drug?.baseUnit || ''),
         batch: i.batch,
         expDate: i.ed,
         buyPrice: rawPrice,
@@ -373,7 +386,7 @@ const GRNTab = () => {
     });
 
     toast({ title: "GRN Disimpan", description: `${invoiceNo} — ${grnItems.length} item masuk stok. PPN ${business.ppnPercent}% diterapkan.` });
-    setInvoiceNo(""); setSupplierId(""); setItems([{ drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "" }]);
+    setInvoiceNo(""); setSupplierId(""); setItems([{ drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "", convertToBase: false }]);
   };
 
   return (
@@ -382,7 +395,7 @@ const GRNTab = () => {
         <CardTitle className="text-base flex items-center gap-2">
           <PackagePlus className="w-4 h-4 text-primary" /> Input Barang Masuk (GRN)
         </CardTitle>
-        <p className="text-xs text-muted-foreground">Harga beli otomatis ditambah PPN {business.ppnPercent}% dari Pengaturan.</p>
+        <p className="text-xs text-muted-foreground">Harga beli otomatis ditambah PPN {business.ppnPercent}% dari Pengaturan. Centang "Konversi ke base unit" hanya jika Qty perlu dikalikan ke satuan dasar (mis. 1 BOX → 100 TABLET).</p>
       </CardHeader>
       <CardContent className="space-y-4">
         {suppliers.length === 0 ? (
@@ -424,6 +437,7 @@ const GRNTab = () => {
                     <TableHead>Nama Obat</TableHead>
                     <TableHead className="w-20">Qty</TableHead>
                     <TableHead className="w-28">Satuan</TableHead>
+                    <TableHead className="w-32">Konversi ke base unit</TableHead>
                     <TableHead>No. Batch</TableHead>
                     <TableHead className="w-32">Exp. Date</TableHead>
                     <TableHead className="w-32">Harga Beli</TableHead>
@@ -434,6 +448,9 @@ const GRNTab = () => {
                 <TableBody>
                   {items.map((row, idx) => {
                     const ppnPrice = row.buyPrice ? Math.round(Number(row.buyPrice) * (1 + business.ppnPercent / 100)) : 0;
+                    const drug = drugs.find((d) => d.id === row.drugId);
+                    const conv = drug?.conversions.find((c) => c.from === row.unit && c.to === drug.baseUnit);
+                    const previewQty = row.convertToBase && conv && row.qty ? Number(row.qty) * conv.factor : Number(row.qty || 0);
                     return (
                       <TableRow key={idx}>
                         <TableCell>
@@ -452,6 +469,19 @@ const GRNTab = () => {
                               {useSettingsStore.getState().masterData.units.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`conv-${idx}`}
+                              checked={row.convertToBase}
+                              onCheckedChange={(v) => updateRow(idx, "convertToBase", Boolean(v))}
+                              disabled={!conv}
+                            />
+                            <label htmlFor={`conv-${idx}`} className="text-xs text-muted-foreground cursor-pointer">
+                              {conv ? `→ ${previewQty} ${drug?.baseUnit}` : (drug ? "Tidak ada konversi" : "—")}
+                            </label>
+                          </div>
                         </TableCell>
                         <TableCell><Input className="h-9" placeholder="B-2026-XXX" value={row.batch} onChange={(e) => updateRow(idx, "batch", e.target.value)} /></TableCell>
                         <TableCell><Input className="h-9" type="month" value={row.ed} onChange={(e) => updateRow(idx, "ed", e.target.value)} /></TableCell>
