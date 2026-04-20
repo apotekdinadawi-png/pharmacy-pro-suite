@@ -115,7 +115,7 @@ const Customers = () => {
           <h1 className="text-2xl font-bold text-foreground">Pelanggan (CRM)</h1>
           <p className="text-sm text-muted-foreground">Membership, poin loyalitas, & peringatan alergi. Data tersimpan permanen.</p>
         </div>
-        <Button onClick={openAdd}><UserPlus className="w-4 h-4 mr-2" /> Tambah Pelanggan</Button>
+        {canEdit && <Button onClick={openAdd}><UserPlus className="w-4 h-4 mr-2" /> Tambah Pelanggan</Button>}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
