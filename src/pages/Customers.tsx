@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useCustomerStore, type Customer, type MemberTier } from "@/stores/useCustomerStore";
+import { useCanEdit } from "@/hooks/useCanEdit";
 
 const tierConfig: Record<MemberTier, { min: number; color: string; discount: number; pointMultiplier: number }> = {
   Bronze: { min: 0, color: "bg-orange-500/10 text-orange-400 border-orange-500/20", discount: 0, pointMultiplier: 1 },
