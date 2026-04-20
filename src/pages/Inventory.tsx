@@ -386,7 +386,7 @@ const GRNTab = () => {
     });
 
     toast({ title: "GRN Disimpan", description: `${invoiceNo} — ${grnItems.length} item masuk stok. PPN ${business.ppnPercent}% diterapkan.` });
-    setInvoiceNo(""); setSupplierId(""); setItems([{ drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "" }]);
+    setInvoiceNo(""); setSupplierId(""); setItems([{ drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "", convertToBase: false }]);
   };
 
   return (
