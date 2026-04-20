@@ -309,10 +309,10 @@ const GRNTab = () => {
   const [invoiceNo, setInvoiceNo] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [receiveDate, setReceiveDate] = useState(new Date().toISOString().split('T')[0]);
-  const [items, setItems] = useState([{ drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "" }]);
+  const [items, setItems] = useState([{ drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "", convertToBase: false }]);
 
-  const addRow = () => setItems([...items, { drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "" }]);
-  const updateRow = (idx: number, field: string, value: string) => {
+  const addRow = () => setItems([...items, { drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "", convertToBase: false }]);
+  const updateRow = (idx: number, field: string, value: string | boolean) => {
     const updated = [...items];
     updated[idx] = { ...updated[idx], [field]: value };
     setItems(updated);
