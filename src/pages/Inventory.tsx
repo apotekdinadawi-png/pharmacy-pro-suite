@@ -395,7 +395,7 @@ const GRNTab = () => {
         <CardTitle className="text-base flex items-center gap-2">
           <PackagePlus className="w-4 h-4 text-primary" /> Input Barang Masuk (GRN)
         </CardTitle>
-        <p className="text-xs text-muted-foreground">Harga beli otomatis ditambah PPN {business.ppnPercent}% dari Pengaturan.</p>
+        <p className="text-xs text-muted-foreground">Harga beli otomatis ditambah PPN {business.ppnPercent}% dari Pengaturan. Centang "Konversi ke base unit" hanya jika Qty perlu dikalikan ke satuan dasar (mis. 1 BOX → 100 TABLET).</p>
       </CardHeader>
       <CardContent className="space-y-4">
         {suppliers.length === 0 ? (
