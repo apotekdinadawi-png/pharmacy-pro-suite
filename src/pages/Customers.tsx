@@ -31,6 +31,7 @@ const fmtRp = (n: number) => `Rp ${n.toLocaleString("id-ID")}`;
 
 const Customers = () => {
   const { customers, addCustomer, updateCustomer, removeCustomer, redeemPoints } = useCustomerStore();
+  const canEdit = useCanEdit();
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
