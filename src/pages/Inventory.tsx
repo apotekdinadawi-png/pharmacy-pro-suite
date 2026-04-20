@@ -14,6 +14,8 @@ import { useInventoryStore, type DrugMaster } from "@/stores/useInventoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useProcurementStore } from "@/stores/useProcurementStore";
 import { formatRupiah } from "@/lib/currency";
+import { useCanEdit } from "@/hooks/useCanEdit";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const categoryColor: Record<string, string> = {
   "Obat Bebas": "bg-success text-success-foreground",
