@@ -112,10 +112,12 @@ const MasterObatTab = () => {
                       </TableCell>
                       <TableCell className="text-right">{formatRupiah(item.sellPrice)}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}><Pencil className="w-3 h-3" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { removeDrug(item.id); toast({ title: "Dihapus", description: `${item.name} dihapus dari master.` }); }}><Trash2 className="w-3 h-3" /></Button>
-                        </div>
+                        {canEdit ? (
+                          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(item)}><Pencil className="w-3 h-3" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { removeDrug(item.id); toast({ title: "Dihapus", description: `${item.name} dihapus dari master.` }); }}><Trash2 className="w-3 h-3" /></Button>
+                          </div>
+                        ) : <span className="text-xs text-muted-foreground">—</span>}
                       </TableCell>
                     </TableRow>
                     {expanded === item.id && (
