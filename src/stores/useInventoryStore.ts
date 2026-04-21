@@ -546,7 +546,7 @@ export const useInventoryStore = create<InventoryState>()((set, get) => ({
     await get().fetchAll();
   },
 
-
+  deductStock: async (drugId, qty) => {
     const drug = get().drugs.find((d) => d.id === drugId);
     if (!drug) return;
     const newStock = Math.max(0, drug.stock - qty);
