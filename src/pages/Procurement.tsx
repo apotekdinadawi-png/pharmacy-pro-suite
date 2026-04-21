@@ -13,10 +13,11 @@ import {
 import { useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { useProcurementStore, type Supplier, type SPItem, type SPRecord } from "@/stores/useProcurementStore";
-import { useInventoryStore } from "@/stores/useInventoryStore";
+import { useInventoryStore, type GRNEntry, type GRNItem } from "@/stores/useInventoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { formatRupiah } from "@/lib/currency";
 import { useCanEdit } from "@/hooks/useCanEdit";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 // ========== UNIFIED SP PRINT FUNCTION ==========
 const printSPUnified = (
