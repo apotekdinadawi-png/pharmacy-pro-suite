@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Truck, FileText, ShieldAlert, Building2, Calendar, Plus, Printer, Search, X, Save, Check, Pencil, Trash2, History
+  Truck, FileText, ShieldAlert, Building2, Calendar, Plus, Printer, Search, X, Save, Check, Pencil, Trash2, History, PackageCheck
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/hooks/use-toast";
