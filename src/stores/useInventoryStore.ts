@@ -81,6 +81,8 @@ interface InventoryState {
   removeGRN: (id: string) => Promise<void>;
   addStockCard: (entry: Omit<StockCardEntry, 'id'>) => Promise<void>;
   addTransaction: (tx: Omit<TransactionRecord, 'id'>) => Promise<void>;
+  updateTransaction: (id: string, tx: Omit<TransactionRecord, 'id'>, user?: string) => Promise<void>;
+  removeTransaction: (id: string, user?: string) => Promise<void>;
   deductStock: (drugId: string, qty: number) => Promise<void>;
   clearPriceAlerts: () => Promise<void>;
 }
@@ -439,6 +441,109 @@ export const useInventoryStore = create<InventoryState>()((set, get) => ({
     await supabase.from('transaction_items').insert(itemInserts);
 
     set((s) => ({ transactions: [...s.transactions, { ...tx, id: txData.id }] }));
+  },
+
+  updateTransaction: async (id, tx, user = 'Admin') => {
+    const state = get();
+    const oldTx = state.transactions.find((t) => t.id === id);
+    if (!oldTx) throw new Error('Transaksi tidak ditemukan');
+
+    // Update header
+    const { error: txError } = await supabase.from('transactions').update({
+      date: tx.date,
+      total: tx.total,
+      payment_method: tx.paymentMethod,
+      kasir: tx.kasir,
+      doctor_name: tx.doctorName,
+      patient_name: tx.patientName,
+    }).eq('id', id);
+    if (txError) throw txError;
+
+    // Replace items
+    await supabase.from('transaction_items').delete().eq('transaction_id', id);
+    const itemInserts = tx.items.map((i) => ({
+      transaction_id: id,
+      drug_id: i.drugId,
+      drug_name: i.drugName,
+      qty: i.qty,
+      unit: i.unit,
+      price: i.price,
+      subtotal: i.subtotal,
+    }));
+    if (itemInserts.length > 0) await supabase.from('transaction_items').insert(itemInserts);
+
+    // Compute qty deltas: stock change = -(new - old) = old - new
+    // Skip racikan (drugId starts with "racikan-")
+    const deltas = new Map<string, { drug: DrugMaster | undefined; delta: number; newName: string; newUnit: string }>();
+    for (const oi of oldTx.items) {
+      if (!oi.drugId || oi.drugId.startsWith('racikan-')) continue;
+      const cur = deltas.get(oi.drugId) || { drug: state.drugs.find((d) => d.id === oi.drugId), delta: 0, newName: oi.drugName, newUnit: oi.unit };
+      cur.delta += oi.qty; // returning to stock
+      deltas.set(oi.drugId, cur);
+    }
+    for (const ni of tx.items) {
+      if (!ni.drugId || ni.drugId.startsWith('racikan-')) continue;
+      const cur = deltas.get(ni.drugId) || { drug: state.drugs.find((d) => d.id === ni.drugId), delta: 0, newName: ni.drugName, newUnit: ni.unit };
+      cur.delta -= ni.qty; // deducting from stock
+      cur.newName = ni.drugName;
+      cur.newUnit = ni.unit;
+      deltas.set(ni.drugId, cur);
+    }
+
+    const stockCardInserts: any[] = [];
+    for (const [drugId, info] of deltas.entries()) {
+      if (!info.drug || info.delta === 0) continue;
+      const newStock = Math.max(0, info.drug.stock + info.delta);
+      await supabase.from('drugs').update({ stock: newStock }).eq('id', drugId);
+      stockCardInserts.push({
+        date: new Date().toISOString().split('T')[0],
+        drug_name: info.drug.name,
+        type: 'Koreksi',
+        qty: Math.abs(info.delta),
+        unit: info.newUnit,
+        batch: '',
+        exp_date: '',
+        source: `Koreksi Penjualan TRX #${id.slice(0, 8)} (${info.delta > 0 ? '+' : ''}${info.delta})`,
+        user,
+        stock_after: newStock,
+      });
+    }
+    if (stockCardInserts.length > 0) await supabase.from('stock_cards').insert(stockCardInserts);
+
+    await get().fetchAll();
+  },
+
+  removeTransaction: async (id, user = 'Admin') => {
+    const state = get();
+    const tx = state.transactions.find((t) => t.id === id);
+    if (!tx) return;
+
+    // Restore stock for each non-racikan item
+    const stockCardInserts: any[] = [];
+    for (const item of tx.items) {
+      if (!item.drugId || item.drugId.startsWith('racikan-')) continue;
+      const drug = state.drugs.find((d) => d.id === item.drugId);
+      if (!drug) continue;
+      const newStock = drug.stock + item.qty;
+      await supabase.from('drugs').update({ stock: newStock }).eq('id', drug.id);
+      stockCardInserts.push({
+        date: new Date().toISOString().split('T')[0],
+        drug_name: drug.name,
+        type: 'Koreksi',
+        qty: item.qty,
+        unit: item.unit,
+        batch: '',
+        exp_date: '',
+        source: `Koreksi Penjualan: Hapus TRX #${id.slice(0, 8)} (+${item.qty})`,
+        user,
+        stock_after: newStock,
+      });
+    }
+    if (stockCardInserts.length > 0) await supabase.from('stock_cards').insert(stockCardInserts);
+
+    await supabase.from('transaction_items').delete().eq('transaction_id', id);
+    await supabase.from('transactions').delete().eq('id', id);
+    await get().fetchAll();
   },
 
   deductStock: async (drugId, qty) => {
