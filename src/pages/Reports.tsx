@@ -189,7 +189,21 @@ const EditTransactionModal = ({ tx, onClose }: { tx: TransactionRecord; onClose:
 
 // ========== LABA RUGI (from real transactions) ==========
 const LabaRugiTab = () => {
-  const { transactions, grnEntries } = useInventoryStore();
+  const { transactions, grnEntries, removeTransaction } = useInventoryStore();
+  const canEdit = useCanEdit();
+  const { profile } = useAuthContext();
+  const userName = profile?.full_name || profile?.username || 'Admin';
+  const [editTx, setEditTx] = useState<TransactionRecord | null>(null);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Hapus transaksi ini? Stok akan dikembalikan dan kartu stok 'Koreksi Penjualan' akan dibuat.")) return;
+    try {
+      await removeTransaction(id, userName);
+      toast({ title: "Transaksi Dihapus", description: "Stok telah dikembalikan." });
+    } catch (e: any) {
+      toast({ title: "Gagal", description: e.message, variant: "destructive" });
+    }
+  };
 
   const totalPendapatan = transactions.reduce((s, t) => s + t.total, 0);
   const totalHPP = grnEntries.reduce((s, g) => s + g.items.reduce((si, i) => si + i.buyPriceWithPPN * i.qty, 0), 0);
