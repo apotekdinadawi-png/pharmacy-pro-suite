@@ -301,6 +301,104 @@ export const useInventoryStore = create<InventoryState>()((set, get) => ({
     await get().fetchAll();
   },
 
+  updateGRN: async (id, grn, user = 'Admin') => {
+    const state = get();
+    const oldGRN = state.grnEntries.find((g) => g.id === id);
+    if (!oldGRN) throw new Error('GRN tidak ditemukan');
+
+    const { error: grnError } = await supabase.from('grn_entries').update({
+      invoice_no: grn.invoiceNo,
+      supplier_id: grn.supplierId,
+      supplier_name: grn.supplierName,
+      date: grn.date,
+      top_days: grn.topDays,
+    }).eq('id', id);
+    if (grnError) throw grnError;
+
+    await supabase.from('grn_items').delete().eq('grn_id', id);
+    const itemInserts = grn.items.map((i) => ({
+      grn_id: id,
+      drug_id: i.drugId,
+      drug_name: i.drugName,
+      qty: i.qty,
+      unit: i.unit,
+      batch: i.batch,
+      exp_date: i.expDate,
+      buy_price: i.buyPrice,
+      buy_price_with_ppn: i.buyPriceWithPPN,
+      previous_buy_price: i.previousBuyPrice,
+      price_increased: i.priceIncreased,
+    }));
+    if (itemInserts.length > 0) await supabase.from('grn_items').insert(itemInserts);
+
+    // Compute qty deltas per drug (new - old)
+    const deltas = new Map<string, { drug: DrugMaster | undefined; delta: number; newItem: GRNItem }>();
+    for (const oldItem of oldGRN.items) {
+      const cur = deltas.get(oldItem.drugId) || { drug: state.drugs.find((d) => d.id === oldItem.drugId), delta: 0, newItem: oldItem };
+      cur.delta -= oldItem.qty;
+      deltas.set(oldItem.drugId, cur);
+    }
+    for (const newItem of grn.items) {
+      const cur = deltas.get(newItem.drugId) || { drug: state.drugs.find((d) => d.id === newItem.drugId), delta: 0, newItem };
+      cur.delta += newItem.qty;
+      cur.newItem = newItem;
+      deltas.set(newItem.drugId, cur);
+    }
+
+    const stockCardInserts: any[] = [];
+    for (const [drugId, info] of deltas.entries()) {
+      if (!info.drug || info.delta === 0) continue;
+      const newStock = Math.max(0, info.drug.stock + info.delta);
+      await supabase.from('drugs').update({ stock: newStock }).eq('id', drugId);
+      stockCardInserts.push({
+        date: new Date().toISOString().split('T')[0],
+        drug_name: info.drug.name,
+        type: 'Koreksi',
+        qty: Math.abs(info.delta),
+        unit: info.newItem.unit,
+        batch: info.newItem.batch,
+        exp_date: info.newItem.expDate,
+        source: `Edit GRN #${grn.invoiceNo} (${info.delta > 0 ? '+' : ''}${info.delta})`,
+        user,
+        stock_after: newStock,
+      });
+    }
+    if (stockCardInserts.length > 0) await supabase.from('stock_cards').insert(stockCardInserts);
+
+    await get().fetchAll();
+  },
+
+  removeGRN: async (id) => {
+    const state = get();
+    const grn = state.grnEntries.find((g) => g.id === id);
+    if (!grn) return;
+
+    const stockCardInserts: any[] = [];
+    for (const item of grn.items) {
+      const drug = state.drugs.find((d) => d.id === item.drugId);
+      if (!drug) continue;
+      const newStock = Math.max(0, drug.stock - item.qty);
+      await supabase.from('drugs').update({ stock: newStock }).eq('id', drug.id);
+      stockCardInserts.push({
+        date: new Date().toISOString().split('T')[0],
+        drug_name: drug.name,
+        type: 'Koreksi',
+        qty: item.qty,
+        unit: item.unit,
+        batch: item.batch,
+        exp_date: item.expDate,
+        source: `Hapus GRN #${grn.invoiceNo} (-${item.qty})`,
+        user: 'Admin',
+        stock_after: newStock,
+      });
+    }
+    if (stockCardInserts.length > 0) await supabase.from('stock_cards').insert(stockCardInserts);
+
+    await supabase.from('grn_items').delete().eq('grn_id', id);
+    await supabase.from('grn_entries').delete().eq('id', id);
+    await get().fetchAll();
+  },
+
   addStockCard: async (entry) => {
     const { data, error } = await supabase.from('stock_cards').insert({
       date: entry.date,
