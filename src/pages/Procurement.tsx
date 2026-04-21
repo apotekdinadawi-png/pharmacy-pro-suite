@@ -8,15 +8,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Truck, FileText, ShieldAlert, Building2, Calendar, Plus, Printer, Search, X, Save, Check, Pencil, Trash2, History
+  Truck, FileText, ShieldAlert, Building2, Calendar, Plus, Printer, Search, X, Save, Check, Pencil, Trash2, History, PackageCheck
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { useProcurementStore, type Supplier, type SPItem, type SPRecord } from "@/stores/useProcurementStore";
-import { useInventoryStore } from "@/stores/useInventoryStore";
+import { useInventoryStore, type GRNEntry, type GRNItem } from "@/stores/useInventoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { formatRupiah } from "@/lib/currency";
 import { useCanEdit } from "@/hooks/useCanEdit";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 // ========== UNIFIED SP PRINT FUNCTION ==========
 const printSPUnified = (
@@ -488,6 +489,223 @@ const SupplierTab = () => {
   );
 };
 
+// ========== RIWAYAT GRN TAB (Barang Masuk) ==========
+const RiwayatGRNTab = () => {
+  const { grnEntries, drugs, updateGRN, removeGRN } = useInventoryStore();
+  const canEdit = useCanEdit();
+  const { user } = useAuthContext();
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Omit<GRNEntry, 'id'> | null>(null);
+
+  const openEdit = (g: GRNEntry) => {
+    setEditId(g.id);
+    setEditForm({
+      invoiceNo: g.invoiceNo,
+      supplierId: g.supplierId,
+      supplierName: g.supplierName,
+      date: g.date,
+      topDays: g.topDays,
+      items: g.items.map((i) => ({ ...i })),
+    });
+  };
+
+  const updateItem = (idx: number, field: keyof GRNItem, value: any) => {
+    if (!editForm) return;
+    const items = [...editForm.items];
+    const it: any = { ...items[idx], [field]: value };
+    // Auto recalc PPN 11% when buyPrice changes
+    if (field === 'buyPrice') {
+      const bp = Number(value) || 0;
+      it.buyPriceWithPPN = Math.round(bp * 1.11);
+    }
+    if (field === 'buyPriceWithPPN') {
+      const bpp = Number(value) || 0;
+      it.buyPrice = Math.round(bpp / 1.11);
+    }
+    items[idx] = it;
+    setEditForm({ ...editForm, items });
+  };
+
+  const removeItemRow = (idx: number) => {
+    if (!editForm) return;
+    setEditForm({ ...editForm, items: editForm.items.filter((_, i) => i !== idx) });
+  };
+
+  const handleSave = async () => {
+    if (!editId || !editForm) return;
+    if (editForm.items.length === 0) {
+      toast({ title: "Error", description: "Minimal harus ada 1 item.", variant: "destructive" });
+      return;
+    }
+    try {
+      await updateGRN(editId, editForm, user?.email || 'Admin');
+      toast({ title: "GRN Diperbarui", description: "Stok dan kartu stok telah disesuaikan." });
+      setEditId(null);
+      setEditForm(null);
+    } catch (e: any) {
+      toast({ title: "Gagal", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async (id: string, invoiceNo: string) => {
+    if (!confirm(`Hapus GRN #${invoiceNo}? Stok akan dikurangi sesuai item dan kartu stok 'Koreksi' akan dibuat.`)) return;
+    try {
+      await removeGRN(id);
+      toast({ title: "GRN Dihapus", description: "Stok telah dikoreksi." });
+    } catch (e: any) {
+      toast({ title: "Gagal", description: e.message, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Card className="glass-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <PackageCheck className="w-4 h-4 text-primary" /> Riwayat Barang Masuk (GRN)
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {grnEntries.length === 0 ? (
+          <p className="text-center py-8 text-sm text-muted-foreground">
+            Belum ada GRN. Input Barang Masuk di halaman Inventaris.
+          </p>
+        ) : (
+          <div className="rounded-lg border overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>No. Faktur</TableHead>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Tanggal</TableHead>
+                  <TableHead className="text-right">TOP</TableHead>
+                  <TableHead className="text-right">Items</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="w-24 text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {grnEntries.slice().reverse().map((g) => {
+                  const total = g.items.reduce((s, i) => s + i.qty * i.buyPriceWithPPN, 0);
+                  return (
+                    <TableRow key={g.id}>
+                      <TableCell className="font-mono text-xs">{g.invoiceNo || '—'}</TableCell>
+                      <TableCell className="text-sm">{g.supplierName}</TableCell>
+                      <TableCell className="text-xs">{g.date}</TableCell>
+                      <TableCell className="text-right text-xs">{g.topDays} hr</TableCell>
+                      <TableCell className="text-right text-xs">{g.items.length}</TableCell>
+                      <TableCell className="text-right font-medium">{formatRupiah(total)}</TableCell>
+                      <TableCell className="text-right">
+                        {canEdit ? (
+                          <div className="flex gap-1 justify-end">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(g)}>
+                              <Pencil className="w-3 h-3" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(g.id, g.invoiceNo)}>
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+
+      <Dialog open={editId !== null} onOpenChange={(o) => { if (!o) { setEditId(null); setEditForm(null); } }}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit GRN — {editForm?.invoiceNo}</DialogTitle>
+          </DialogHeader>
+          {editForm && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="space-y-1.5">
+                  <Label>No. Faktur</Label>
+                  <Input value={editForm.invoiceNo} onChange={(e) => setEditForm({ ...editForm, invoiceNo: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Supplier</Label>
+                  <Input value={editForm.supplierName} onChange={(e) => setEditForm({ ...editForm, supplierName: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Tanggal</Label>
+                  <Input type="date" value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>TOP (hari)</Label>
+                  <Input type="number" value={editForm.topDays} onChange={(e) => setEditForm({ ...editForm, topDays: Number(e.target.value) })} />
+                </div>
+              </div>
+
+              <div className="rounded-lg border overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Obat</TableHead>
+                      <TableHead className="w-20">Qty</TableHead>
+                      <TableHead className="w-24">Satuan</TableHead>
+                      <TableHead className="w-28">Batch</TableHead>
+                      <TableHead className="w-32">Exp Date</TableHead>
+                      <TableHead className="w-28">Harga Beli</TableHead>
+                      <TableHead className="w-32">Harga + PPN 11%</TableHead>
+                      <TableHead className="w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {editForm.items.map((it, idx) => {
+                      const drug = drugs.find((d) => d.id === it.drugId);
+                      const oldQty = grnEntries.find((g) => g.id === editId)?.items.find((x, xi) => xi === idx)?.qty;
+                      return (
+                        <TableRow key={idx}>
+                          <TableCell className="text-xs">
+                            <div className="font-medium">{it.drugName}</div>
+                            {drug && <div className="text-muted-foreground">Stok saat ini: {drug.stock}</div>}
+                          </TableCell>
+                          <TableCell>
+                            <Input className="h-9" type="number" value={it.qty} onChange={(e) => updateItem(idx, 'qty', Number(e.target.value))} />
+                            {oldQty !== undefined && oldQty !== it.qty && (
+                              <div className="text-[10px] text-warning mt-1">Sebelumnya: {oldQty}</div>
+                            )}
+                          </TableCell>
+                          <TableCell><Input className="h-9" value={it.unit} onChange={(e) => updateItem(idx, 'unit', e.target.value)} /></TableCell>
+                          <TableCell><Input className="h-9" value={it.batch} onChange={(e) => updateItem(idx, 'batch', e.target.value)} /></TableCell>
+                          <TableCell><Input className="h-9" type="date" value={it.expDate} onChange={(e) => updateItem(idx, 'expDate', e.target.value)} /></TableCell>
+                          <TableCell><Input className="h-9" type="number" value={it.buyPrice} onChange={(e) => updateItem(idx, 'buyPrice', Number(e.target.value))} /></TableCell>
+                          <TableCell>
+                            <Input className="h-9" type="number" value={it.buyPriceWithPPN} onChange={(e) => updateItem(idx, 'buyPriceWithPPN', Number(e.target.value))} />
+                            <div className="text-[10px] text-muted-foreground mt-1">Auto PPN 11%</div>
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeItemRow(idx)}>
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-3">
+                ℹ️ Perubahan qty akan otomatis menyesuaikan stok obat dan membuat entri kartu stok bertipe <strong>Koreksi</strong>.
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditId(null); setEditForm(null); }}>Batal</Button>
+            <Button onClick={handleSave} className="gap-2"><Save className="w-4 h-4" /> Simpan & Sesuaikan Stok</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+};
+
 // ========== INVOICE TAB ==========
 const InvoiceTab = () => {
   const { invoiceTrackers, markPaid } = useProcurementStore();
@@ -558,6 +776,7 @@ const Procurement = () => (
         <TabsTrigger value="sp-auto" className="gap-1.5"><FileText className="w-3.5 h-3.5" /> SP Reguler</TabsTrigger>
         <TabsTrigger value="sp-khusus" className="gap-1.5"><ShieldAlert className="w-3.5 h-3.5" /> SP Khusus</TabsTrigger>
         <TabsTrigger value="riwayat" className="gap-1.5"><History className="w-3.5 h-3.5" /> Riwayat SP</TabsTrigger>
+        <TabsTrigger value="riwayat-grn" className="gap-1.5"><PackageCheck className="w-3.5 h-3.5" /> Riwayat GRN</TabsTrigger>
         <TabsTrigger value="supplier" className="gap-1.5"><Building2 className="w-3.5 h-3.5" /> Supplier</TabsTrigger>
         <TabsTrigger value="faktur" className="gap-1.5"><Calendar className="w-3.5 h-3.5" /> Status Faktur</TabsTrigger>
       </TabsList>
@@ -565,6 +784,7 @@ const Procurement = () => (
       <TabsContent value="sp-auto"><SPOtomatisTab /></TabsContent>
       <TabsContent value="sp-khusus"><SPKhususTab /></TabsContent>
       <TabsContent value="riwayat"><RiwayatSPTab /></TabsContent>
+      <TabsContent value="riwayat-grn"><RiwayatGRNTab /></TabsContent>
       <TabsContent value="supplier"><SupplierTab /></TabsContent>
       <TabsContent value="faktur"><InvoiceTab /></TabsContent>
     </Tabs>
