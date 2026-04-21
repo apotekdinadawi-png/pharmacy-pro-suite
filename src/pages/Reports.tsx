@@ -5,19 +5,187 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   BarChart3, TrendingUp, TrendingDown, FileText, Users, Printer,
-  ArrowUpRight, ArrowDownRight, Search, Package
+  ArrowUpRight, ArrowDownRight, Search, Package, Pencil, Trash2, X, Save, Plus
 } from "lucide-react";
 import {
   ChartContainer, ChartTooltip, ChartTooltipContent
 } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
-import { useInventoryStore } from "@/stores/useInventoryStore";
+import { useInventoryStore, type TransactionRecord } from "@/stores/useInventoryStore";
 import { formatRupiah } from "@/lib/currency";
+import { useCanEdit } from "@/hooks/useCanEdit";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
 
 const fmtRp = (n: number) => formatRupiah(n);
+
+// ========== EDIT TRANSACTION MODAL ==========
+type TxItem = TransactionRecord['items'][number];
+const EditTransactionModal = ({ tx, onClose }: { tx: TransactionRecord; onClose: () => void }) => {
+  const { drugs, updateTransaction } = useInventoryStore();
+  const { profile } = useAuthContext();
+  const userName = profile?.full_name || profile?.username || 'Admin';
+
+  const [form, setForm] = useState<Omit<TransactionRecord, 'id'>>({
+    date: tx.date,
+    items: tx.items.map((i) => ({ ...i })),
+    total: tx.total,
+    paymentMethod: tx.paymentMethod,
+    kasir: tx.kasir,
+    doctorName: tx.doctorName,
+    patientName: tx.patientName,
+  });
+
+  const recalcTotal = (items: TxItem[]) => items.reduce((s, i) => s + i.subtotal, 0);
+
+  const updateItem = (idx: number, field: keyof TxItem, value: any) => {
+    const items = [...form.items];
+    const it: any = { ...items[idx], [field]: value };
+    if (field === 'qty' || field === 'price') {
+      it.subtotal = (Number(it.qty) || 0) * (Number(it.price) || 0);
+    }
+    items[idx] = it;
+    setForm({ ...form, items, total: recalcTotal(items) });
+  };
+
+  const removeItem = (idx: number) => {
+    const items = form.items.filter((_, i) => i !== idx);
+    setForm({ ...form, items, total: recalcTotal(items) });
+  };
+
+  const addItem = (drugId: string) => {
+    const d = drugs.find((x) => x.id === drugId);
+    if (!d) return;
+    const items = [...form.items, { drugId: d.id, drugName: d.name, qty: 1, unit: d.baseUnit, price: d.sellPrice, subtotal: d.sellPrice }];
+    setForm({ ...form, items, total: recalcTotal(items) });
+  };
+
+  const handleSave = async () => {
+    if (form.items.length === 0) { toast({ title: "Error", description: "Minimal harus ada 1 item.", variant: "destructive" }); return; }
+    try {
+      await updateTransaction(tx.id, form, userName);
+      toast({ title: "Transaksi Diperbarui", description: "Stok telah di-rollback dan disesuaikan." });
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Gagal", description: e.message, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Transaksi — {tx.date} ({tx.kasir})</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label>Tanggal</Label>
+              <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Metode Pembayaran</Label>
+              <Select value={form.paymentMethod} onValueChange={(v) => setForm({ ...form, paymentMethod: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Tunai">Tunai</SelectItem>
+                  <SelectItem value="Debit">Debit</SelectItem>
+                  <SelectItem value="QRIS">QRIS</SelectItem>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Kasir</Label>
+              <Input value={form.kasir} onChange={(e) => setForm({ ...form, kasir: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Nama Dokter (opsional)</Label>
+              <Input value={form.doctorName || ''} onChange={(e) => setForm({ ...form, doctorName: e.target.value || undefined })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Nama Pasien (opsional)</Label>
+              <Input value={form.patientName || ''} onChange={(e) => setForm({ ...form, patientName: e.target.value || undefined })} />
+            </div>
+          </div>
+
+          <div className="rounded-lg border overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Obat</TableHead>
+                  <TableHead className="w-20">Qty</TableHead>
+                  <TableHead className="w-24">Satuan</TableHead>
+                  <TableHead className="w-28">Harga</TableHead>
+                  <TableHead className="w-28 text-right">Subtotal</TableHead>
+                  <TableHead className="w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {form.items.map((it, idx) => {
+                  const drug = drugs.find((d) => d.id === it.drugId);
+                  const oldQty = tx.items[idx]?.qty;
+                  const isRacikan = it.drugId.startsWith('racikan-');
+                  return (
+                    <TableRow key={idx}>
+                      <TableCell className="text-xs">
+                        <div className="font-medium">{it.drugName}</div>
+                        {drug && !isRacikan && <div className="text-muted-foreground">Stok: {drug.stock}</div>}
+                        {isRacikan && <div className="text-muted-foreground italic">(racikan — stok tidak diubah)</div>}
+                      </TableCell>
+                      <TableCell>
+                        <Input className="h-9" type="number" value={it.qty} onChange={(e) => updateItem(idx, 'qty', Number(e.target.value))} />
+                        {oldQty !== undefined && oldQty !== it.qty && (
+                          <div className="text-[10px] text-warning mt-1">Sebelumnya: {oldQty}</div>
+                        )}
+                      </TableCell>
+                      <TableCell><Input className="h-9" value={it.unit} onChange={(e) => updateItem(idx, 'unit', e.target.value)} /></TableCell>
+                      <TableCell><Input className="h-9" type="number" value={it.price} onChange={(e) => updateItem(idx, 'price', Number(e.target.value))} /></TableCell>
+                      <TableCell className="text-right text-sm font-medium">{fmtRp(it.subtotal)}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeItem(idx)}>
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Label className="text-xs whitespace-nowrap">Tambah obat:</Label>
+              <Select value="" onValueChange={addItem}>
+                <SelectTrigger className="h-9 w-64"><SelectValue placeholder="Pilih obat..." /></SelectTrigger>
+                <SelectContent>{drugs.map((d) => <SelectItem key={d.id} value={d.id}>{d.name} (stok: {d.stock})</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Total Baru</p>
+              <p className="text-xl font-bold text-primary">{fmtRp(form.total)}</p>
+            </div>
+          </div>
+
+          <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-3">
+            ℹ️ Saat disimpan, sistem akan otomatis mengembalikan stok lama lalu mengurangi stok baru, dan mencatat perubahan di kartu stok sebagai <strong>Koreksi Penjualan</strong>.
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Batal</Button>
+          <Button onClick={handleSave} className="gap-2"><Save className="w-4 h-4" /> Simpan & Rollback Stok</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 
 // ========== LABA RUGI (from real transactions) ==========
 const LabaRugiTab = () => {
