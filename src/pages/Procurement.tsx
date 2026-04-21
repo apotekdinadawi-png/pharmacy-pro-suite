@@ -776,6 +776,7 @@ const Procurement = () => (
         <TabsTrigger value="sp-auto" className="gap-1.5"><FileText className="w-3.5 h-3.5" /> SP Reguler</TabsTrigger>
         <TabsTrigger value="sp-khusus" className="gap-1.5"><ShieldAlert className="w-3.5 h-3.5" /> SP Khusus</TabsTrigger>
         <TabsTrigger value="riwayat" className="gap-1.5"><History className="w-3.5 h-3.5" /> Riwayat SP</TabsTrigger>
+        <TabsTrigger value="riwayat-grn" className="gap-1.5"><PackageCheck className="w-3.5 h-3.5" /> Riwayat GRN</TabsTrigger>
         <TabsTrigger value="supplier" className="gap-1.5"><Building2 className="w-3.5 h-3.5" /> Supplier</TabsTrigger>
         <TabsTrigger value="faktur" className="gap-1.5"><Calendar className="w-3.5 h-3.5" /> Status Faktur</TabsTrigger>
       </TabsList>
@@ -783,6 +784,7 @@ const Procurement = () => (
       <TabsContent value="sp-auto"><SPOtomatisTab /></TabsContent>
       <TabsContent value="sp-khusus"><SPKhususTab /></TabsContent>
       <TabsContent value="riwayat"><RiwayatSPTab /></TabsContent>
+      <TabsContent value="riwayat-grn"><RiwayatGRNTab /></TabsContent>
       <TabsContent value="supplier"><SupplierTab /></TabsContent>
       <TabsContent value="faktur"><InvoiceTab /></TabsContent>
     </Tabs>
