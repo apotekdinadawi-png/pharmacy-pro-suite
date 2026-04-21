@@ -274,7 +274,9 @@ const LabaRugiTab = () => {
                   <TableHead>Tanggal</TableHead>
                   <TableHead>Kasir</TableHead>
                   <TableHead>Metode</TableHead>
+                  <TableHead>Items</TableHead>
                   <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="w-24 text-right">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -283,7 +285,20 @@ const LabaRugiTab = () => {
                     <TableCell className="text-xs">{t.date}</TableCell>
                     <TableCell className="text-sm">{t.kasir}</TableCell>
                     <TableCell><Badge variant="outline">{t.paymentMethod}</Badge></TableCell>
+                    <TableCell className="text-xs">{t.items.length} item</TableCell>
                     <TableCell className="text-right font-medium">{fmtRp(t.total)}</TableCell>
+                    <TableCell className="text-right">
+                      {canEdit ? (
+                        <div className="flex gap-1 justify-end">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditTx(t)}>
+                            <Pencil className="w-3 h-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(t.id)}>
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -291,6 +306,8 @@ const LabaRugiTab = () => {
           </CardContent>
         </Card>
       )}
+
+      {editTx && <EditTransactionModal tx={editTx} onClose={() => setEditTx(null)} />}
     </div>
   );
 };
