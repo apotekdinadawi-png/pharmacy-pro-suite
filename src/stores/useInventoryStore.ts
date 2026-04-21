@@ -81,6 +81,8 @@ interface InventoryState {
   removeGRN: (id: string) => Promise<void>;
   addStockCard: (entry: Omit<StockCardEntry, 'id'>) => Promise<void>;
   addTransaction: (tx: Omit<TransactionRecord, 'id'>) => Promise<void>;
+  updateTransaction: (id: string, tx: Omit<TransactionRecord, 'id'>, user?: string) => Promise<void>;
+  removeTransaction: (id: string, user?: string) => Promise<void>;
   deductStock: (drugId: string, qty: number) => Promise<void>;
   clearPriceAlerts: () => Promise<void>;
 }
