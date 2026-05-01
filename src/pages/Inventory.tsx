@@ -429,9 +429,7 @@ const GRNTab = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nama Obat</TableHead>
-                    <TableHead className="w-20">Qty</TableHead>
-                    <TableHead className="w-28">Satuan</TableHead>
-                    <TableHead className="w-32">Konversi ke base unit</TableHead>
+                    <TableHead className="w-36">Jumlah Bersih (baseUnit)</TableHead>
                     <TableHead>No. Batch</TableHead>
                     <TableHead className="w-32">Exp. Date</TableHead>
                     <TableHead className="w-32">Harga Beli</TableHead>
@@ -443,38 +441,20 @@ const GRNTab = () => {
                   {items.map((row, idx) => {
                     const ppnPrice = row.buyPrice ? Math.round(Number(row.buyPrice) * (1 + business.ppnPercent / 100)) : 0;
                     const drug = drugs.find((d) => d.id === row.drugId);
-                    const conv = drug?.conversions.find((c) => c.from === row.unit && c.to === drug.baseUnit);
-                    const previewQty = row.convertToBase && conv && row.qty ? Number(row.qty) * conv.factor : Number(row.qty || 0);
                     return (
                       <TableRow key={idx}>
                         <TableCell>
                           <Select value={row.drugId} onValueChange={(v) => updateRow(idx, "drugId", v)}>
                             <SelectTrigger className="h-9"><SelectValue placeholder="Pilih obat" /></SelectTrigger>
                             <SelectContent>
-                              {drugs.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell><Input className="h-9" type="number" placeholder="0" value={row.qty} onChange={(e) => updateRow(idx, "qty", e.target.value)} /></TableCell>
-                        <TableCell>
-                          <Select value={row.unit} onValueChange={(v) => updateRow(idx, "unit", v)}>
-                            <SelectTrigger className="h-9"><SelectValue placeholder="Satuan" /></SelectTrigger>
-                            <SelectContent>
-                              {useSettingsStore.getState().masterData.units.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
+                              {drugs.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}{d.baseUnit ? ` (${d.baseUnit})` : ''}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <Checkbox
-                              id={`conv-${idx}`}
-                              checked={row.convertToBase}
-                              onCheckedChange={(v) => updateRow(idx, "convertToBase", Boolean(v))}
-                              disabled={!conv}
-                            />
-                            <label htmlFor={`conv-${idx}`} className="text-xs text-muted-foreground cursor-pointer">
-                              {conv ? `→ ${previewQty} ${drug?.baseUnit}` : (drug ? "Tidak ada konversi" : "—")}
-                            </label>
+                            <Input className="h-9" type="number" step="0.01" placeholder="0" value={row.qty} onChange={(e) => updateRow(idx, "qty", e.target.value)} />
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">{drug?.baseUnit || '—'}</span>
                           </div>
                         </TableCell>
                         <TableCell><Input className="h-9" placeholder="B-2026-XXX" value={row.batch} onChange={(e) => updateRow(idx, "batch", e.target.value)} /></TableCell>
