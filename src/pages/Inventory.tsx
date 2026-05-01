@@ -14,7 +14,7 @@ import { useInventoryStore, type DrugMaster } from "@/stores/useInventoryStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useProcurementStore } from "@/stores/useProcurementStore";
 import { formatRupiah } from "@/lib/currency";
-import { useCanEdit } from "@/hooks/useCanEdit";
+import { useCanEdit, useIsAPJ } from "@/hooks/useCanEdit";
 
 
 const categoryColor: Record<string, string> = {
