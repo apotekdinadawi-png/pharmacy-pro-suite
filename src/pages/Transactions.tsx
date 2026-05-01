@@ -124,7 +124,7 @@ const Transactions = () => {
     setCart((prev) => {
       const existing = prev.find((c) => c.drugId === drug.id);
       if (existing) {
-        if (existing.qty >= drug.stock) { toast({ title: "Stok tidak cukup", variant: "destructive" }); return prev; }
+        if (existing.qty + 1 > drug.stock) { toast({ title: "Stok tidak cukup", variant: "destructive" }); return prev; }
         return prev.map((c) => c.drugId === drug.id ? { ...c, qty: c.qty + 1 } : c);
       }
       return [...prev, { drugId: drug.id, name: drug.name, price: drug.sellPrice, qty: 1, unit: drug.baseUnit }];
@@ -133,6 +133,17 @@ const Transactions = () => {
 
   const updateQty = (drugId: string, delta: number) => {
     setCart((prev) => prev.map((c) => c.drugId === drugId ? { ...c, qty: Math.max(0, c.qty + delta) } : c).filter((c) => c.qty > 0));
+  };
+
+  const setQty = (drugId: string, value: string) => {
+    const n = parseFloat(value);
+    if (isNaN(n) || n < 0) return;
+    const drug = drugs.find((d) => d.id === drugId);
+    if (drug && !drugId.startsWith('racikan-') && n > drug.stock) {
+      toast({ title: "Stok tidak cukup", description: `Sisa stok ${drug.stock} ${drug.baseUnit}.`, variant: "destructive" });
+      return;
+    }
+    setCart((prev) => prev.map((c) => c.drugId === drugId ? { ...c, qty: n } : c));
   };
 
   const total = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
