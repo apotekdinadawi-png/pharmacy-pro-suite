@@ -366,7 +366,15 @@ const Transactions = () => {
                     <div className="flex items-center gap-1 ml-2">
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEtiketItemId(item.drugId); setEtiketValue(item.aturanPakai || ""); }}><Sticker className="w-3 h-3" /></Button>
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQty(item.drugId, -1)}><Minus className="w-3 h-3" /></Button>
-                      <span className="text-sm font-semibold w-6 text-center">{item.qty}</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={item.qty}
+                        onChange={(e) => setQty(item.drugId, e.target.value)}
+                        className="h-7 w-14 text-center text-sm font-semibold px-1"
+                        title="Ketik desimal untuk eceran (mis. 0.5)"
+                      />
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQty(item.drugId, 1)}><Plus className="w-3 h-3" /></Button>
                     </div>
                   </div>
