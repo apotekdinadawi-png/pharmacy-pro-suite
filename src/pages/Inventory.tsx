@@ -226,10 +226,28 @@ const MasterObatTab = () => {
   );
 };
 
+const KOREKSI_REASONS = [
+  "Barang Rusak/Cacat",
+  "Barang Kedaluwarsa (ED)",
+  "Salah Input (Admin)",
+  "Bonus PBF",
+  "Stok Opname (Selisih Fisik)",
+  "Obat Hilang",
+];
+
 const KartuStokTab = () => {
-  const { stockCards, drugs } = useInventoryStore();
+  const { stockCards, drugs, addStockCard, updateDrug } = useInventoryStore();
+  const isAPJ = useIsAPJ();
   const [search, setSearch] = useState("");
   const [filterItem, setFilterItem] = useState("all");
+
+  // Koreksi dialog state
+  const [koreksiOpen, setKoreksiOpen] = useState(false);
+  const [koreksiDrugId, setKoreksiDrugId] = useState<string>("");
+  const [koreksiType, setKoreksiType] = useState<'Masuk' | 'Keluar'>('Keluar');
+  const [koreksiQty, setKoreksiQty] = useState<string>("");
+  const [koreksiReason, setKoreksiReason] = useState<string>("");
+  const [koreksiNote, setKoreksiNote] = useState<string>("");
 
   const filtered = stockCards.filter((s) => {
     const matchSearch = s.drugName.toLowerCase().includes(search.toLowerCase()) || s.batch.toLowerCase().includes(search.toLowerCase());
@@ -239,6 +257,48 @@ const KartuStokTab = () => {
 
   const uniqueItems = [...new Set(stockCards.map((s) => s.drugName))];
 
+  const openKoreksi = () => {
+    setKoreksiDrugId("");
+    setKoreksiType('Keluar');
+    setKoreksiQty("");
+    setKoreksiReason("");
+    setKoreksiNote("");
+    setKoreksiOpen(true);
+  };
+
+  const handleSaveKoreksi = async () => {
+    const drug = drugs.find((d) => d.id === koreksiDrugId);
+    const qty = parseFloat(koreksiQty);
+    if (!drug) { toast({ title: "Error", description: "Pilih obat.", variant: "destructive" }); return; }
+    if (!qty || qty <= 0) { toast({ title: "Error", description: "Qty harus > 0.", variant: "destructive" }); return; }
+    if (!koreksiReason) { toast({ title: "Error", description: "Pilih alasan koreksi.", variant: "destructive" }); return; }
+
+    const delta = koreksiType === 'Masuk' ? qty : -qty;
+    const newStock = Math.max(0, drug.stock + delta);
+
+    try {
+      // Update stok obat (TIDAK menimpa kartu stok lama, hanya update master stok)
+      await updateDrug(drug.id, { stock: newStock });
+      // Tambah baris BARU di kartu stok bertipe 'Koreksi' (audit trail)
+      await addStockCard({
+        date: new Date().toISOString().split('T')[0],
+        drugName: drug.name,
+        type: koreksiType,
+        qty,
+        unit: drug.baseUnit,
+        batch: '',
+        expDate: '',
+        source: `Koreksi APJ — ${koreksiReason}${koreksiNote ? ` (${koreksiNote})` : ''}`,
+        user: 'Apt. Madinatul Adawiyah, S.Farm',
+        stockAfter: newStock,
+      });
+      toast({ title: "Koreksi Tersimpan", description: `${drug.name}: ${koreksiType === 'Masuk' ? '+' : '-'}${qty} ${drug.baseUnit}. Audit trail dicatat.` });
+      setKoreksiOpen(false);
+    } catch (e: any) {
+      toast({ title: "Gagal", description: e.message || 'Tidak dapat menyimpan koreksi.', variant: "destructive" });
+    }
+  };
+
   return (
     <Card className="glass-card">
       <CardHeader className="pb-2">
@@ -247,6 +307,11 @@ const KartuStokTab = () => {
             <ClipboardList className="w-4 h-4 text-primary" /> Kartu Stok Digital
           </CardTitle>
           <div className="flex gap-2 flex-wrap">
+            {isAPJ && (
+              <Button size="sm" variant="default" onClick={openKoreksi} className="gap-1.5">
+                <Pencil className="w-3.5 h-3.5" /> Edit / Koreksi
+              </Button>
+            )}
             <Select value={filterItem} onValueChange={setFilterItem}>
               <SelectTrigger className="w-48 h-9"><SelectValue placeholder="Filter obat" /></SelectTrigger>
               <SelectContent>
@@ -260,6 +325,11 @@ const KartuStokTab = () => {
             </div>
           </div>
         </div>
+        {isAPJ && (
+          <p className="text-[11px] text-muted-foreground mt-1">
+            🔒 Fitur Koreksi hanya untuk APJ. Setiap koreksi membuat baris baru (tidak menimpa data) sebagai audit trail.
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         <div className="rounded-lg border overflow-auto">
@@ -279,24 +349,91 @@ const KartuStokTab = () => {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Belum ada data kartu stok. Data akan muncul setelah input Barang Masuk atau transaksi Kasir.</TableCell></TableRow>
-              ) : filtered.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="text-xs whitespace-nowrap">{row.date}</TableCell>
-                  <TableCell className="font-medium">{row.drugName}</TableCell>
-                  <TableCell>
-                    <Badge className={row.type === "Masuk" ? "bg-success text-success-foreground" : "bg-accent text-accent-foreground"}>{row.type}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-semibold">{row.type === "Masuk" ? `+${row.qty}` : `-${row.qty}`}</TableCell>
-                  <TableCell>{row.unit}</TableCell>
-                  <TableCell className="text-xs">{row.batch}</TableCell>
-                  <TableCell className="text-xs">{row.source}</TableCell>
-                  <TableCell className="text-right font-semibold">{row.stockAfter}</TableCell>
-                </TableRow>
-              ))}
+              ) : filtered.map((row) => {
+                const isKoreksi = row.source.startsWith('Koreksi');
+                return (
+                  <TableRow key={row.id} className={isKoreksi ? 'bg-warning/5' : ''}>
+                    <TableCell className="text-xs whitespace-nowrap">{row.date}</TableCell>
+                    <TableCell className="font-medium">{row.drugName}</TableCell>
+                    <TableCell>
+                      <Badge className={
+                        isKoreksi ? "bg-warning text-warning-foreground"
+                          : row.type === "Masuk" ? "bg-success text-success-foreground"
+                          : "bg-accent text-accent-foreground"
+                      }>{isKoreksi ? `Koreksi (${row.type})` : row.type}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">{row.type === "Masuk" ? `+${row.qty}` : `-${row.qty}`}</TableCell>
+                    <TableCell>{row.unit}</TableCell>
+                    <TableCell className="text-xs">{row.batch}</TableCell>
+                    <TableCell className="text-xs">{row.source}</TableCell>
+                    <TableCell className="text-right font-semibold">{row.stockAfter}</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
       </CardContent>
+
+      {/* Koreksi dialog — APJ only */}
+      <Dialog open={koreksiOpen} onOpenChange={setKoreksiOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-warning" /> Koreksi Stok (APJ)
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="bg-warning/10 border border-warning/20 rounded-md p-2.5 text-xs">
+              ⚠️ Koreksi tidak menimpa data lama. Baris baru bertipe <b>Koreksi</b> akan dibuat sebagai audit trail.
+            </div>
+            <div className="space-y-1.5">
+              <Label>Pilih Obat *</Label>
+              <Select value={koreksiDrugId} onValueChange={setKoreksiDrugId}>
+                <SelectTrigger><SelectValue placeholder="Pilih obat" /></SelectTrigger>
+                <SelectContent>
+                  {drugs.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name} (stok: {d.stock} {d.baseUnit})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Tipe Koreksi *</Label>
+                <Select value={koreksiType} onValueChange={(v) => setKoreksiType(v as 'Masuk' | 'Keluar')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Masuk">Masuk (+)</SelectItem>
+                    <SelectItem value="Keluar">Keluar (−)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Qty *</Label>
+                <Input type="number" step="0.01" min="0" placeholder="0" value={koreksiQty} onChange={(e) => setKoreksiQty(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Alasan Koreksi *</Label>
+              <Select value={koreksiReason} onValueChange={setKoreksiReason}>
+                <SelectTrigger><SelectValue placeholder="Pilih alasan" /></SelectTrigger>
+                <SelectContent>
+                  {KOREKSI_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Catatan (opsional)</Label>
+              <Input placeholder="Detail tambahan..." value={koreksiNote} onChange={(e) => setKoreksiNote(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setKoreksiOpen(false)}>Batal</Button>
+            <Button onClick={handleSaveKoreksi} className="gap-1.5"><Save className="w-3.5 h-3.5" /> Simpan Koreksi</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
