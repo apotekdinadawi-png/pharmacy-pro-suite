@@ -23,7 +23,7 @@ const MASTER_EMAIL = 'apotekdinadawi@gmail.com';
 export const roleMenuAccess: Record<AppRole, string[]> = {
   admin: ['dashboard', 'transactions', 'inventory', 'procurement', 'reports', 'customers', 'users', 'settings'],
   apj: ['dashboard', 'transactions', 'inventory', 'procurement', 'reports', 'customers', 'users', 'settings'],
-  aping: ['dashboard', 'transactions', 'inventory', 'procurement', 'reports', 'customers'],
+  aping: ['dashboard', 'transactions', 'inventory', 'procurement', 'customers'],
   kasir: ['dashboard', 'transactions', 'customers'],
 };
 
