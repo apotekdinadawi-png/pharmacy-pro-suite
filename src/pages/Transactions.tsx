@@ -124,7 +124,7 @@ const Transactions = () => {
     setCart((prev) => {
       const existing = prev.find((c) => c.drugId === drug.id);
       if (existing) {
-        if (existing.qty >= drug.stock) { toast({ title: "Stok tidak cukup", variant: "destructive" }); return prev; }
+        if (existing.qty + 1 > drug.stock) { toast({ title: "Stok tidak cukup", variant: "destructive" }); return prev; }
         return prev.map((c) => c.drugId === drug.id ? { ...c, qty: c.qty + 1 } : c);
       }
       return [...prev, { drugId: drug.id, name: drug.name, price: drug.sellPrice, qty: 1, unit: drug.baseUnit }];
@@ -135,6 +135,17 @@ const Transactions = () => {
     setCart((prev) => prev.map((c) => c.drugId === drugId ? { ...c, qty: Math.max(0, c.qty + delta) } : c).filter((c) => c.qty > 0));
   };
 
+  const setQty = (drugId: string, value: string) => {
+    const n = parseFloat(value);
+    if (isNaN(n) || n < 0) return;
+    const drug = drugs.find((d) => d.id === drugId);
+    if (drug && !drugId.startsWith('racikan-') && n > drug.stock) {
+      toast({ title: "Stok tidak cukup", description: `Sisa stok ${drug.stock} ${drug.baseUnit}.`, variant: "destructive" });
+      return;
+    }
+    setCart((prev) => prev.map((c) => c.drugId === drugId ? { ...c, qty: n } : c));
+  };
+
   const total = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
 
   const addRacikanRow = () => setRacikanItems([...racikanItems, { drugId: "", qty: "", unit: "" }]);
@@ -143,8 +154,8 @@ const Transactions = () => {
 
   const racikanTotal = racikanItems.reduce((sum, ri) => {
     const prod = drugs.find((p) => p.id === ri.drugId);
-    return sum + (prod ? prod.sellPrice * (parseInt(ri.qty) || 0) : 0);
-  }, 0) + (parseInt(jasaRacik) || 0);
+    return sum + (prod ? prod.sellPrice * (parseFloat(ri.qty) || 0) : 0);
+  }, 0) + (parseFloat(jasaRacik) || 0);
 
   const addRacikanToCart = () => {
     const validItems = racikanItems.filter((ri) => ri.drugId && ri.qty);
@@ -239,7 +250,7 @@ const Transactions = () => {
                       <TableBody>
                         {racikanItems.map((ri, idx) => {
                           const prod = drugs.find((p) => p.id === ri.drugId);
-                          const sub = prod ? prod.sellPrice * (parseInt(ri.qty) || 0) : 0;
+                          const sub = prod ? prod.sellPrice * (parseFloat(ri.qty) || 0) : 0;
                           return (
                             <TableRow key={idx}>
                               <TableCell>
@@ -355,7 +366,15 @@ const Transactions = () => {
                     <div className="flex items-center gap-1 ml-2">
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEtiketItemId(item.drugId); setEtiketValue(item.aturanPakai || ""); }}><Sticker className="w-3 h-3" /></Button>
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQty(item.drugId, -1)}><Minus className="w-3 h-3" /></Button>
-                      <span className="text-sm font-semibold w-6 text-center">{item.qty}</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={item.qty}
+                        onChange={(e) => setQty(item.drugId, e.target.value)}
+                        className="h-7 w-14 text-center text-sm font-semibold px-1"
+                        title="Ketik desimal untuk eceran (mis. 0.5)"
+                      />
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => updateQty(item.drugId, 1)}><Plus className="w-3 h-3" /></Button>
                     </div>
                   </div>
