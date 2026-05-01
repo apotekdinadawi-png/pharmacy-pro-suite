@@ -250,7 +250,7 @@ const Transactions = () => {
                       <TableBody>
                         {racikanItems.map((ri, idx) => {
                           const prod = drugs.find((p) => p.id === ri.drugId);
-                          const sub = prod ? prod.sellPrice * (parseInt(ri.qty) || 0) : 0;
+                          const sub = prod ? prod.sellPrice * (parseFloat(ri.qty) || 0) : 0;
                           return (
                             <TableRow key={idx}>
                               <TableCell>
