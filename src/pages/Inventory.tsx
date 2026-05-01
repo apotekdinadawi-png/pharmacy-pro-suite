@@ -339,19 +339,13 @@ const GRNTab = () => {
       const drug = drugs.find((d) => d.id === i.drugId);
       const rawPrice = Number(i.buyPrice);
       const priceWithPPN = Math.round(rawPrice * ppnMultiplier);
-      const inputQty = Number(i.qty);
-      // Bug fix Oskadon: hanya konversi ke base unit jika checkbox dicentang
-      // dan ada konversi yang cocok (from = unit input, to = baseUnit obat)
-      let finalQty = inputQty;
-      if (i.convertToBase && drug) {
-        const conv = drug.conversions.find((c) => c.from === i.unit && c.to === drug.baseUnit);
-        if (conv) finalQty = inputQty * conv.factor;
-      }
+      // Qty di-input manual user dalam satuan baseUnit (Jumlah Bersih)
+      const finalQty = Number(i.qty);
       return {
         drugId: i.drugId,
         drugName: drug?.name || '',
         qty: finalQty,
-        unit: i.convertToBase && drug ? drug.baseUnit : (i.unit || drug?.baseUnit || ''),
+        unit: drug?.baseUnit || '',
         batch: i.batch,
         expDate: i.ed,
         buyPrice: rawPrice,
@@ -386,7 +380,7 @@ const GRNTab = () => {
     });
 
     toast({ title: "GRN Disimpan", description: `${invoiceNo} — ${grnItems.length} item masuk stok. PPN ${business.ppnPercent}% diterapkan.` });
-    setInvoiceNo(""); setSupplierId(""); setItems([{ drugId: "", qty: "", unit: "", batch: "", ed: "", buyPrice: "", convertToBase: false }]);
+    setInvoiceNo(""); setSupplierId(""); setItems([{ drugId: "", qty: "", batch: "", ed: "", buyPrice: "" }]);
   };
 
   return (
