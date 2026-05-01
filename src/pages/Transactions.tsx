@@ -154,8 +154,8 @@ const Transactions = () => {
 
   const racikanTotal = racikanItems.reduce((sum, ri) => {
     const prod = drugs.find((p) => p.id === ri.drugId);
-    return sum + (prod ? prod.sellPrice * (parseInt(ri.qty) || 0) : 0);
-  }, 0) + (parseInt(jasaRacik) || 0);
+    return sum + (prod ? prod.sellPrice * (parseFloat(ri.qty) || 0) : 0);
+  }, 0) + (parseFloat(jasaRacik) || 0);
 
   const addRacikanToCart = () => {
     const validItems = racikanItems.filter((ri) => ri.drugId && ri.qty);
