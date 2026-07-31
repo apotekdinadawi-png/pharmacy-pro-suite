@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,9 @@ import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const rawNext = searchParams.get("next") ?? "";
+  const nextPath = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard";
   const { signIn, user, profile } = useAuthContext();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,9 +38,9 @@ const Login = () => {
   // Redirect if already logged in with approved status
   useEffect(() => {
     if (user && profile?.status === 'approved') {
-      navigate("/dashboard", { replace: true });
+      navigate(nextPath, { replace: true });
     }
-  }, [user, profile, navigate]);
+  }, [user, profile, navigate, nextPath]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +54,7 @@ const Login = () => {
       return;
     }
 
-    navigate("/dashboard");
+    navigate(nextPath);
     setLoading(false);
   };
 

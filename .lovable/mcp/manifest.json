@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "sdk_version": "0.26.1",
+  "path": "/functions/v1/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://szojizbycdttszrjldly.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "pharmacy-pro-suite",
+      "version": "0.1.0",
+      "title": "Pharmacy Pro Suite"
+    },
+    "tools": [
+      {
+        "name": "search_drugs",
+        "title": "Cari obat",
+        "description": "Cari obat di inventaris apotek berdasarkan nama, kandungan aktif, atau kategori. Mengembalikan stok, satuan dasar, harga jual, dan rak.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Kata kunci nama obat / kandungan aktif. Kosongkan untuk semua obat."
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Jumlah maksimum hasil (default 20)."
+            }
+          },
+          "required": [
+            "query",
+            "limit"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "low_stock_report",
+        "title": "Laporan stok menipis",
+        "description": "Daftar obat yang stoknya berada pada atau di bawah stok minimum, untuk perencanaan pengadaan.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "description": "Jumlah maksimum hasil (default 50)."
+            }
+          },
+          "required": [
+            "limit"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_stock_card",
+        "title": "Kartu stok obat",
+        "description": "Riwayat kartu stok (masuk, keluar, koreksi) untuk sebuah obat berdasarkan nama, termasuk batch, tanggal kedaluwarsa, dan stok akhir.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "drug_name": {
+              "type": "string",
+              "description": "Nama obat (pencocokan sebagian diperbolehkan)."
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Jumlah maksimum baris (default 30)."
+            }
+          },
+          "required": [
+            "drug_name",
+            "limit"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "sales_summary",
+        "title": "Ringkasan penjualan",
+        "description": "Ringkasan omzet penjualan pada rentang tanggal tertentu: total transaksi, total omzet, rata-rata nilai transaksi, dan rincian per metode pembayaran.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "start_date": {
+              "type": "string",
+              "description": "Tanggal mulai ISO (YYYY-MM-DD). Kosongkan untuk 30 hari terakhir."
+            },
+            "end_date": {
+              "type": "string",
+              "description": "Tanggal akhir ISO (YYYY-MM-DD). Kosongkan untuk hari ini."
+            }
+          },
+          "required": [
+            "start_date",
+            "end_date"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}

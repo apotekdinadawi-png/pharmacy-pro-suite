@@ -16,6 +16,7 @@ import Customers from "./pages/Customers";
 import SettingsPage from "./pages/SettingsPage";
 import UserManagement from "./pages/UserManagement";
 import NotFound from "./pages/NotFound";
+import OAuthConsent from "./pages/OAuthConsent";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
             <Route element={<AppLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/transactions" element={<Transactions />} />
