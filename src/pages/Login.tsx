@@ -38,9 +38,9 @@ const Login = () => {
   // Redirect if already logged in with approved status
   useEffect(() => {
     if (user && profile?.status === 'approved') {
-      navigate("/dashboard", { replace: true });
+      navigate(nextPath, { replace: true });
     }
-  }, [user, profile, navigate]);
+  }, [user, profile, navigate, nextPath]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +54,7 @@ const Login = () => {
       return;
     }
 
-    navigate("/dashboard");
+    navigate(nextPath);
     setLoading(false);
   };
 
